@@ -1,0 +1,152 @@
+# User-SOA-Switch .gitignore
+
+# ===================================
+# Backup and Output Files
+# ===================================
+# JSON backup files (contain sensitive user data)
+*_backup_*.json
+*.backup.json
+backups/
+exported/
+
+# ===================================
+# Credentials and Secrets
+# ===================================
+# Never commit credentials
+*.credentials
+*.secret
+*.pfx
+*.p12
+*.key
+*.pem
+credentials.json
+secrets.json
+appsettings.Development.json
+
+# Environment files
+.env
+.env.local
+*.env
+
+# ===================================
+# PowerShell Specific
+# ===================================
+# PowerShell transcript logs
+PowerShell_transcript*.txt
+transcript*.txt
+
+# PowerShell module cache
+PSGetModuleInfo.xml
+
+# ===================================
+# Logs and Temporary Files
+# ===================================
+# Log files
+*.log
+logs/
+*.log.*
+debug_log_*.txt
+
+# Temporary files
+*.tmp
+*.temp
+~$*
+*.swp
+*.swo
+*~
+
+# ===================================
+# Visual Studio / VS Code
+# ===================================
+# VS Code settings (if personal)
+.vscode/
+*.code-workspace
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# ===================================
+# JetBrains IDEs
+# ===================================
+.idea/
+*.iml
+*.iws
+
+# ===================================
+# Windows
+# ===================================
+# Windows thumbnail cache
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Recycle Bin
+$RECYCLE.BIN/
+
+# Windows shortcuts
+*.lnk
+
+# ===================================
+# macOS
+# ===================================
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ===================================
+# Test and Development
+# ===================================
+# Test outputs
+test-output/
+test-results/
+*.test.json
+
+# Development artifacts
+dev/
+scratch/
+sandbox/
+
+# ===================================
+# Package Management
+# ===================================
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+
+# Node modules (if any JS tooling)
+node_modules/
+
+# ===================================
+# Build Outputs
+# ===================================
+bin/
+obj/
+build/
+dist/
+out/
+
+# ===================================
+# Documentation Build
+# ===================================
+docs/_build/
+site/
+
+# ===================================
+# Other
+# ===================================
+# Archives
+*.zip
+*.7z
+*.tar.gz
+*.rar
+
+# Office temporary files
+~*.docx
+~*.xlsx
+~*.pptx
