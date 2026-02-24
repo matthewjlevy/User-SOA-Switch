@@ -709,6 +709,7 @@ try {
     # Get UI elements
     Write-DebugLog "Binding UI elements..." -Level INFO
     $btnConnect = $window.FindName("btnConnect")
+    $btnDisconnect = $window.FindName("btnDisconnect")
     $btnLoadUsers = $window.FindName("btnLoadUsers")
     $btnRefresh = $window.FindName("btnRefresh")
     $lblConnectionStatus = $window.FindName("lblConnectionStatus")
@@ -738,7 +739,73 @@ try {
         if (Connect-ToGraph -StatusLabel $lblConnectionStatus -UserLabel $lblConnectedUser -StatusBar $txtStatusBar) {
             $btnLoadUsers.IsEnabled = $true
             $btnRefresh.IsEnabled = $true
+            $btnDisconnect.IsEnabled = $true
             $txtStatusBar.Text = "Connected to Graph. Click 'Load Synced Users' to begin."
+        }
+    })
+    
+    # Disconnect/Switch User button click event
+    $btnDisconnect.Add_Click({
+        Write-DebugLog "Disconnect/Switch User button clicked" -Level INFO
+        
+        $result = [System.Windows.MessageBox]::Show(
+            "This will disconnect from Microsoft Graph and clear all loaded data. Do you want to continue?",
+            "Switch User",
+            [System.Windows.MessageBoxButton]::YesNo,
+            [System.Windows.MessageBoxImage]::Question
+        )
+        
+        if ($result -eq [System.Windows.MessageBoxResult]::Yes) {
+            try {
+                Write-Host "Disconnecting from Microsoft Graph..." -ForegroundColor Yellow
+                Write-DebugLog "Disconnecting from Microsoft Graph" -Level INFO
+                Disconnect-MgGraph | Out-Null
+                Write-DebugLog "Disconnected successfully" -Level SUCCESS
+                
+                # Reset UI state
+                $script:IsConnected = $false
+                $script:IsUsersLoaded = $false
+                $script:AllUsers = @()
+                
+                # Clear data grid
+                if ($null -ne $script:UserCollection) {
+                    $script:UserCollection.Clear()
+                }
+                
+                # Reset UI controls
+                $lblConnectionStatus.Content = "Not Connected"
+                $lblConnectionStatus.Foreground = "Red"
+                $lblConnectedUser.Content = "N/A"
+                $lblConnectedUser.Foreground = "Gray"
+                $btnLoadUsers.IsEnabled = $false
+                $btnRefresh.IsEnabled = $false
+                $btnDisconnect.IsEnabled = $false
+                $btnBackup.IsEnabled = $false
+                $txtFilterUsers.IsEnabled = $false
+                $btnClearFilter.IsEnabled = $false
+                $btnSelectAll.IsEnabled = $false
+                $btnSelectNone.IsEnabled = $false
+                $txtTotalCount.Text = "0"
+                $txtFilteredCount.Text = "0"
+                $txtSelectedCount.Text = "0"
+                $btnBackup.Content = "Backup Selected Users (0)"
+                $txtFilterUsers.Text = ""
+                
+                $txtStatusBar.Text = "Disconnected. Click 'Connect to Graph' to sign in with a different account."
+                
+                Write-Host "Disconnected successfully. You can now connect with a different account." -ForegroundColor Green
+                Write-DebugLog "UI reset completed" -Level SUCCESS
+                
+            } catch {
+                Write-Host "Error during disconnect: $_" -ForegroundColor Red
+                Write-DebugLog "Error during disconnect: $_" -Level ERROR
+                [System.Windows.MessageBox]::Show(
+                    "Failed to disconnect: $_",
+                    "Disconnect Error",
+                    [System.Windows.MessageBoxButton]::OK,
+                    [System.Windows.MessageBoxImage]::Error
+                )
+            }
         }
     })
     

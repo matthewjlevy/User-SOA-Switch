@@ -18,14 +18,17 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="120"/>
                     <ColumnDefinition Width="120"/>
+                    <ColumnDefinition Width="120"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 
                 <Button Name="btnConnect" Grid.Column="0" Content="Connect to Graph" 
                         Height="35" Margin="0,0,5,0" FontWeight="Bold"/>
-                <Button Name="btnLoadUsers" Grid.Column="1" Content="Load Synced Users" 
+                <Button Name="btnDisconnect" Grid.Column="1" Content="Switch User" 
                         Height="35" Margin="5,0" IsEnabled="False" FontWeight="Bold"/>
-                <Button Name="btnRefresh" Grid.Column="2" Content="Refresh" 
+                <Button Name="btnLoadUsers" Grid.Column="2" Content="Load Synced Users" 
+                        Height="35" Margin="5,0" IsEnabled="False" FontWeight="Bold"/>
+                <Button Name="btnRefresh" Grid.Column="3" Content="Refresh" 
                         Height="35" Margin="5,0,0,0" IsEnabled="False" HorizontalAlignment="Left" Width="100"/>
             </Grid>
         </GroupBox>
