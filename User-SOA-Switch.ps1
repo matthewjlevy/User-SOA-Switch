@@ -963,16 +963,33 @@ try {
         Write-DebugLog "Cleared all selections" -Level SUCCESS
     })
     
-    # DataGrid checkbox click - update counts in real-time
-    $dgUsers.Add_CellEditEnding({
-        # Update counts after checkbox change
-        Start-Sleep -Milliseconds 100  # Small delay to let checkbox update
+# DataGrid TargetUpdated event - fires when checkbox binding updates
+$dgUsers.AddHandler(
+    [System.Windows.Data.Binding]::TargetUpdatedEvent,
+    [System.Windows.RoutedEventHandler]{
+        param($sender, $e)
+        # Update counts immediately when checkbox value changes
         Update-SelectionCounts -TotalCountLabel $txtTotalCount `
                                -FilteredCountLabel $txtFilteredCount `
                                -SelectedCountLabel $txtSelectedCount `
                                -BackupButton $btnBackup
-    })
-    
+    }
+)
+
+# Also handle PreviewMouseUp on DataGrid to catch checkbox clicks
+$dgUsers.Add_PreviewMouseUp({
+    param($sender, $e)
+    # Small delay to let the click complete and binding update
+    $dgUsers.Dispatcher.Invoke(
+        [System.Windows.Threading.DispatcherPriority]::Background,
+        [System.Action]{
+            Update-SelectionCounts -TotalCountLabel $txtTotalCount `
+                                   -FilteredCountLabel $txtFilteredCount `
+                                   -SelectedCountLabel $txtSelectedCount `
+                                   -BackupButton $btnBackup
+        }
+    )
+})    
     # Backup button click event
     $btnBackup.Add_Click({
         Write-DebugLog "Backup button clicked" -Level INFO

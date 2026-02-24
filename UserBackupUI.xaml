@@ -24,7 +24,7 @@
                 
                 <Button Name="btnConnect" Grid.Column="0" Content="Connect to Graph" 
                         Height="35" Margin="0,0,5,0" FontWeight="Bold"/>
-                <Button Name="btnDisconnect" Grid.Column="1" Content="Switch User" 
+                <Button Name="btnDisconnect" Grid.Column="1" Content="Disconnect" 
                         Height="35" Margin="5,0" IsEnabled="False" FontWeight="Bold"/>
                 <Button Name="btnLoadUsers" Grid.Column="2" Content="Load Synced Users" 
                         Height="35" Margin="5,0" IsEnabled="False" FontWeight="Bold"/>
@@ -95,7 +95,7 @@
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Auto">
                 <DataGrid.Columns>
-                    <DataGridCheckBoxColumn Header="✓" Width="40" Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                    <DataGridCheckBoxColumn Header="✓" Width="40" Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, NotifyOnSourceUpdated=True}"/>
                     <DataGridTextColumn Header="Display Name" Width="220" Binding="{Binding DisplayName}" IsReadOnly="True"/>
                     <DataGridTextColumn Header="User Principal Name" Width="280" Binding="{Binding UserPrincipalName}" IsReadOnly="True"/>
                     <DataGridTextColumn Header="SAM Account" Width="150" Binding="{Binding OnPremisesSamAccountName}" IsReadOnly="True"/>
