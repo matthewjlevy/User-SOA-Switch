@@ -1,6 +1,6 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Entra ID User Sync Attribute Backup - Multi-User Selection" Height="700" Width="1200"
+        Title="Entra ID User Sync Attribute Backup - Multi-User Selection" Height="820" Width="1200"
         WindowStartupLocation="CenterScreen">
     <Grid Margin="10">
         <Grid.RowDefinitions>
@@ -8,6 +8,8 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -128,8 +130,35 @@
             </Border>
         </Grid>
 
+        <!-- SOA Warning Banner -->
+        <Border Grid.Row="4" Background="#FFF3CD" BorderBrush="#FFC107" BorderThickness="1,1,1,0"
+                Padding="10,8" Margin="0,5,0,0">
+            <StackPanel>
+                <TextBlock Text="⚠  SOURCE OF AUTHORITY (SOA) MANAGEMENT — ADVANCED OPERATIONS"
+                           FontWeight="Bold" Foreground="#856404" FontSize="12"/>
+                <TextBlock TextWrapping="Wrap" FontSize="11" Margin="0,3,0,0" Foreground="#856404"
+                           Text="PREREQUISITE SEQUENCE: (1) Backup user attributes  →  (2) Clear On-Prem Attributes  →  (3) Switch SOA to Cloud.  Ensure each user is excluded from on-premises AD sync before switching SOA. These operations are irreversible without a valid backup."/>
+            </StackPanel>
+        </Border>
+
+        <!-- SOA Action Buttons -->
+        <Border Grid.Row="5" Background="#FFF3CD" BorderBrush="#FFC107" BorderThickness="1,0,1,1"
+                Padding="10,8" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal">
+                <Button Name="btnClearAttributes" Content="Clear On-Prem Attributes"
+                        Width="200" Height="35" Margin="0,0,8,0" IsEnabled="False"
+                        FontWeight="Bold" Background="#DC3545" Foreground="White" BorderBrush="#C82333"/>
+                <Button Name="btnSwitchSOA" Content="Switch SOA to Cloud"
+                        Width="180" Height="35" Margin="0,0,8,0" IsEnabled="False"
+                        FontWeight="Bold" Background="#6F42C1" Foreground="White" BorderBrush="#5A32A3"/>
+                <Button Name="btnRestoreBackup" Content="Restore from Backup"
+                        Width="180" Height="35" Margin="0,0,0,0" IsEnabled="False"
+                        FontWeight="Bold" Background="#28A745" Foreground="White" BorderBrush="#1E7E34"/>
+            </StackPanel>
+        </Border>
+
         <!-- Action Buttons -->
-        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" 
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" 
                     Margin="0,10,0,10">
             <Button Name="btnBackup" Content="Backup Selected Users (0)" Width="200" Height="38" 
                     Margin="5,0" IsEnabled="False" FontWeight="Bold" FontSize="13"/>
@@ -138,7 +167,7 @@
         </StackPanel>
 
         <!-- Status Bar -->
-        <Border Grid.Row="5" Background="#F0F0F0" BorderBrush="#CCCCCC" 
+        <Border Grid.Row="7" Background="#F0F0F0" BorderBrush="#CCCCCC" 
                 BorderThickness="0,1,0,0" Padding="5">
             <TextBlock Name="txtStatusBar" Text="Ready. Click 'Connect to Graph' to begin." 
                        FontStyle="Italic"/>

@@ -386,6 +386,14 @@ function Update-SelectionCounts {
         $BackupButton.Content = "Backup Selected Users ($selectedCount)"
         $BackupButton.IsEnabled = ($selectedCount -gt 0)
         
+        # Update SOA action buttons if they have been bound
+        if ($script:btnClearAttributes) {
+            $script:btnClearAttributes.IsEnabled = ($selectedCount -gt 0)
+        }
+        if ($script:btnSwitchSOA) {
+            $script:btnSwitchSOA.IsEnabled = ($selectedCount -gt 0)
+        }
+        
         Write-DebugLog "Updated counts - Total: $totalCount, Selected: $selectedCount" -Level INFO
     }
     catch {
@@ -1074,6 +1082,131 @@ function Restore-UserAttributesFromBackup {
     }
 }
 
+function Switch-UserSOA {
+    <#
+    .SYNOPSIS
+    Switches the Source of Authority (SOA) for selected users from On-Premises to Cloud
+    
+    .PARAMETER SelectedUsers
+    Array of selected users whose SOA will be switched
+    
+    .PARAMETER StatusBar
+    Status bar control to update with progress
+    #>
+    param(
+        [Parameter(Mandatory=$true)]
+        [array]$SelectedUsers,
+        
+        [Parameter(Mandatory=$true)]
+        $StatusBar
+    )
+    
+    try {
+        if ($SelectedUsers.Count -eq 0) {
+            [System.Windows.MessageBox]::Show(
+                "Please select at least one user to switch Source of Authority.",
+                "No Users Selected",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Warning
+            )
+            return $false
+        }
+        
+        # Strong warning before SOA switch
+        $result = [System.Windows.MessageBox]::Show(
+            "⚠ CRITICAL WARNING ⚠`n`n" +
+            "You are about to switch the Source of Authority (SOA) for $($SelectedUsers.Count) user(s) from On-Premises to Cloud.`n`n" +
+            "PREREQUISITES:`n" +
+            "• On-premises attributes should already be cleared for these users`n" +
+            "• Users should be excluded from on-premises AD sync scope`n" +
+            "• A backup of user attributes should exist before proceeding`n`n" +
+            "This will set 'onPremisesSyncEnabled' to false for the selected users.`n`n" +
+            "Are you sure you want to proceed?",
+            "Switch Source of Authority",
+            [System.Windows.MessageBoxButton]::YesNo,
+            [System.Windows.MessageBoxImage]::Warning
+        )
+        
+        if ($result -ne [System.Windows.MessageBoxResult]::Yes) {
+            $StatusBar.Text = "SOA switch cancelled"
+            return $false
+        }
+        
+        Write-DebugLog "Starting SOA switch for $($SelectedUsers.Count) users" -Level INFO
+        $StatusBar.Text = "Switching Source of Authority for $($SelectedUsers.Count) user(s)..."
+        
+        $successCount = 0
+        $failureCount = 0
+        $errors = @()
+        
+        foreach ($user in $SelectedUsers) {
+            try {
+                Write-DebugLog "Switching SOA for user: $($user.UserPrincipalName)" -Level INFO
+                
+                $updateBody = @{
+                    onPremisesSyncEnabled = $false
+                }
+                
+                $uri = "https://graph.microsoft.com/v1.0/users/$($user.Id)"
+                Invoke-MgGraphRequest -Method PATCH -Uri $uri -Body $updateBody -ContentType "application/json"
+                
+                Write-DebugLog "Successfully switched SOA for: $($user.UserPrincipalName)" -Level SUCCESS
+                $successCount++
+            }
+            catch {
+                $errorMsg = $_.Exception.Message
+                Write-DebugLog "Failed to switch SOA for $($user.UserPrincipalName): $errorMsg" -Level ERROR
+                $errors += "$($user.UserPrincipalName): $errorMsg"
+                $failureCount++
+            }
+        }
+        
+        # Show result summary
+        $summaryMsg = "SOA switch completed:`n`n"
+        $summaryMsg += "Successful: $successCount`n"
+        $summaryMsg += "Failed: $failureCount"
+        
+        if ($errors.Count -gt 0) {
+            $summaryMsg += "`n`nErrors:`n" + ($errors -join "`n")
+        }
+        
+        $msgType = if ($failureCount -eq 0) { 
+            [System.Windows.MessageBoxImage]::Information 
+        } elseif ($successCount -eq 0) { 
+            [System.Windows.MessageBoxImage]::Error 
+        } else { 
+            [System.Windows.MessageBoxImage]::Warning 
+        }
+        
+        [System.Windows.MessageBox]::Show(
+            $summaryMsg,
+            "SOA Switch Complete",
+            [System.Windows.MessageBoxButton]::OK,
+            $msgType
+        )
+        
+        $StatusBar.Text = "SOA switch completed: $successCount successful, $failureCount failed"
+        Write-DebugLog "SOA switch completed: $successCount successful, $failureCount failed" -Level INFO
+        
+        return $true
+    }
+    catch {
+        $errorMsg = $_.Exception.Message
+        Write-DebugLog "SOA switch failed: $errorMsg" -Level ERROR
+        Write-DebugLog "Stack Trace: $($_.ScriptStackTrace)" -Level ERROR
+        $StatusBar.Text = "SOA switch failed: $errorMsg"
+        
+        [System.Windows.MessageBox]::Show(
+            "Failed to switch Source of Authority:`n`n$errorMsg",
+            "SOA Switch Error",
+            [System.Windows.MessageBoxButton]::OK,
+            [System.Windows.MessageBoxImage]::Error
+        )
+        
+        return $false
+    }
+}
+
 # Main script execution
 try {
     # Initialize debug logging
@@ -1135,6 +1268,9 @@ try {
     $btnBackup = $window.FindName("btnBackup")
     $btnClose = $window.FindName("btnClose")
     $txtStatusBar = $window.FindName("txtStatusBar")
+    $script:btnClearAttributes = $window.FindName("btnClearAttributes")
+    $script:btnSwitchSOA = $window.FindName("btnSwitchSOA")
+    $script:btnRestoreBackup = $window.FindName("btnRestoreBackup")
     
     Write-DebugLog "All UI elements bound successfully" -Level SUCCESS
     
@@ -1146,6 +1282,7 @@ try {
             $btnLoadUsers.IsEnabled = $true
             $btnRefresh.IsEnabled = $true
             $btnDisconnect.IsEnabled = $true
+            $script:btnRestoreBackup.IsEnabled = $true
             $txtStatusBar.Text = "Connected to Graph. Click 'Load Synced Users' to begin."
         }
     })
@@ -1191,6 +1328,9 @@ try {
                 $btnClearFilter.IsEnabled = $false
                 $btnSelectAll.IsEnabled = $false
                 $btnSelectNone.IsEnabled = $false
+                $script:btnClearAttributes.IsEnabled = $false
+                $script:btnSwitchSOA.IsEnabled = $false
+                $script:btnRestoreBackup.IsEnabled = $false
                 $txtTotalCount.Text = "0"
                 $txtFilteredCount.Text = "0"
                 $txtSelectedCount.Text = "0"
@@ -1258,6 +1398,7 @@ try {
                 $btnClearFilter.IsEnabled = $true
                 $btnSelectAll.IsEnabled = $true
                 $btnSelectNone.IsEnabled = $true
+                $script:btnRestoreBackup.IsEnabled = $true
                 
                 Write-DebugLog "User load completed. $($users.Count) users loaded" -Level SUCCESS
             }
@@ -1284,6 +1425,8 @@ try {
         $btnSelectAll.IsEnabled = $false
         $btnSelectNone.IsEnabled = $false
         $btnBackup.IsEnabled = $false
+        $script:btnClearAttributes.IsEnabled = $false
+        $script:btnSwitchSOA.IsEnabled = $false
         
         # Reset counts
         $txtTotalCount.Text = "0"
@@ -1400,6 +1543,26 @@ $dgUsers.Add_PreviewMouseUp({
     $btnBackup.Add_Click({
         Write-DebugLog "Backup button clicked" -Level INFO
         Backup-SelectedUsersToJson -StatusBar $txtStatusBar
+    })
+    
+    # Clear On-Premises Attributes button click event
+    $script:btnClearAttributes.Add_Click({
+        Write-DebugLog "Clear On-Premises Attributes button clicked" -Level INFO
+        $selectedUsers = Get-SelectedUsers
+        Clear-OnPremisesAttributes -SelectedUsers $selectedUsers -StatusBar $txtStatusBar
+    })
+    
+    # Switch SOA to Cloud button click event
+    $script:btnSwitchSOA.Add_Click({
+        Write-DebugLog "Switch SOA button clicked" -Level INFO
+        $selectedUsers = Get-SelectedUsers
+        Switch-UserSOA -SelectedUsers $selectedUsers -StatusBar $txtStatusBar
+    })
+    
+    # Restore from Backup button click event
+    $script:btnRestoreBackup.Add_Click({
+        Write-DebugLog "Restore from Backup button clicked" -Level INFO
+        Restore-UserAttributesFromBackup -StatusBar $txtStatusBar
     })
     
     # Close button click event
