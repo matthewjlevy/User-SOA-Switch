@@ -137,7 +137,7 @@
                 <TextBlock Text="⚠  SOURCE OF AUTHORITY (SOA) MANAGEMENT — ADVANCED OPERATIONS"
                            FontWeight="Bold" Foreground="#856404" FontSize="12"/>
                 <TextBlock TextWrapping="Wrap" FontSize="11" Margin="0,3,0,0" Foreground="#856404"
-                           Text="PREREQUISITE SEQUENCE: (1) Backup user attributes  →  (2) Clear On-Prem Attributes  →  (3) Switch SOA to Cloud.  Ensure each user is excluded from on-premises AD sync before switching SOA. These operations are irreversible without a valid backup."/>
+                           Text="PREREQUISITE SEQUENCE: (1) Backup user attributes  → (2) Switch SOA to Cloud. → (3) Clear On-Prem Attributes.   Ensure each user is excluded from on-premises AD sync before switching SOA. These operations are irreversible without a valid backup."/>
             </StackPanel>
         </Border>
 
@@ -151,6 +151,9 @@
                 <Button Name="btnSwitchSOA" Content="Switch SOA to Cloud"
                         Width="180" Height="35" Margin="0,0,8,0" IsEnabled="False"
                         FontWeight="Bold" Background="#6F42C1" Foreground="White" BorderBrush="#5A32A3"/>
+                <Button Name="btnRollbackSOA" Content="Rollback SOA to On-Prem"
+                        Width="195" Height="35" Margin="0,0,8,0" IsEnabled="False"
+                        FontWeight="Bold" Background="#FF8C00" Foreground="White" BorderBrush="#E67E00"/>
                 <Button Name="btnRestoreBackup" Content="Restore from Backup"
                         Width="180" Height="35" Margin="0,0,0,0" IsEnabled="False"
                         FontWeight="Bold" Background="#28A745" Foreground="White" BorderBrush="#1E7E34"/>

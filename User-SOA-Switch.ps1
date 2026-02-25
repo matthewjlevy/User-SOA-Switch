@@ -393,6 +393,9 @@ function Update-SelectionCounts {
         if ($script:btnSwitchSOA) {
             $script:btnSwitchSOA.IsEnabled = ($selectedCount -gt 0)
         }
+        if ($script:btnRollbackSOA) {
+            $script:btnRollbackSOA.IsEnabled = ($selectedCount -gt 0)
+        }
         
         Write-DebugLog "Updated counts - Total: $totalCount, Selected: $selectedCount" -Level INFO
     }
@@ -1086,6 +1089,9 @@ function Switch-UserSOA {
     <#
     .SYNOPSIS
     Switches the Source of Authority (SOA) for selected users from On-Premises to Cloud
+    This function performs a two-step process:
+    1. Sets isCloudManaged = true via the onPremisesSyncBehavior endpoint (v1.0 API)
+    2. Clears on-premises sync attributes after verifying the SOA switch
     
     .PARAMETER SelectedUsers
     Array of selected users whose SOA will be switched
@@ -1116,11 +1122,15 @@ function Switch-UserSOA {
         $result = [System.Windows.MessageBox]::Show(
             "⚠ CRITICAL WARNING ⚠`n`n" +
             "You are about to switch the Source of Authority (SOA) for $($SelectedUsers.Count) user(s) from On-Premises to Cloud.`n`n" +
+            "CRITICAL SEQUENCE:`n" +
+            "1. Set isCloudManaged = true (SOA switch to cloud)`n" +
+            "2. Verify SOA switch succeeded`n" +
+            "3. Clear on-premises sync attributes`n`n" +
             "PREREQUISITES:`n" +
-            "• On-premises attributes should already be cleared for these users`n" +
-            "• Users should be excluded from on-premises AD sync scope`n" +
-            "• A backup of user attributes should exist before proceeding`n`n" +
-            "This will set 'onPremisesSyncEnabled' to false for the selected users.`n`n" +
+            "✓ Users should be excluded from on-premises AD sync scope`n" +
+            "✓ A backup of user attributes should exist before proceeding`n" +
+            "✓ Ensure groups are cloud-managed BEFORE switching users`n`n" +
+            "This operation will use the Microsoft Graph v1.0 endpoint.`n`n" +
             "Are you sure you want to proceed?",
             "Switch Source of Authority",
             [System.Windows.MessageBoxButton]::YesNo,
@@ -1132,47 +1142,136 @@ function Switch-UserSOA {
             return $false
         }
         
-        Write-DebugLog "Starting SOA switch for $($SelectedUsers.Count) users" -Level INFO
-        $StatusBar.Text = "Switching Source of Authority for $($SelectedUsers.Count) user(s)..."
+        Write-DebugLog "========================================" -Level INFO
+        Write-DebugLog "Starting SOA switch process for $($SelectedUsers.Count) user(s)" -Level INFO
+        Write-DebugLog "========================================" -Level INFO
         
-        $successCount = 0
-        $failureCount = 0
+        $totalUsers = $SelectedUsers.Count
+        $soaSwitchSuccess = @()
+        $soaSwitchFailed = @()
+        $attributeClearSuccess = @()
+        $attributeClearFailed = @()
         $errors = @()
         
+        # === PHASE 1: Switch SOA to Cloud (isCloudManaged = true) ===
+        $StatusBar.Text = "Phase 1/2: Switching SOA to cloud for $totalUsers user(s)..."
+        Write-DebugLog "PHASE 1: Switching Source of Authority to Cloud" -Level INFO
+        
+        $currentUser = 0
         foreach ($user in $SelectedUsers) {
+            $currentUser++
             try {
-                Write-DebugLog "Switching SOA for user: $($user.UserPrincipalName)" -Level INFO
+                Write-DebugLog "[$currentUser/$totalUsers] Switching SOA for: $($user.UserPrincipalName)" -Level INFO
+                $StatusBar.Text = "Phase 1/2: Switching SOA [$currentUser/$totalUsers] - $($user.UserPrincipalName)"
                 
+                # Use v1.0 endpoint with onPremisesSyncBehavior
                 $updateBody = @{
-                    onPremisesSyncEnabled = $false
+                    isCloudManaged = $true
                 }
                 
-                $uri = "https://graph.microsoft.com/v1.0/users/$($user.Id)"
+                $uri = "https://graph.microsoft.com/v1.0/users/$($user.Id)/onPremisesSyncBehavior"
                 Invoke-MgGraphRequest -Method PATCH -Uri $uri -Body $updateBody -ContentType "application/json"
                 
-                Write-DebugLog "Successfully switched SOA for: $($user.UserPrincipalName)" -Level SUCCESS
-                $successCount++
+                Write-DebugLog "✓ Successfully set isCloudManaged=true for: $($user.UserPrincipalName)" -Level SUCCESS
+                $soaSwitchSuccess += $user
             }
             catch {
                 $errorMsg = $_.Exception.Message
-                Write-DebugLog "Failed to switch SOA for $($user.UserPrincipalName): $errorMsg" -Level ERROR
-                $errors += "$($user.UserPrincipalName): $errorMsg"
-                $failureCount++
+                Write-DebugLog "✗ Failed to switch SOA for $($user.UserPrincipalName): $errorMsg" -Level ERROR
+                $soaSwitchFailed += $user
+                $errors += "SOA Switch - $($user.UserPrincipalName): $errorMsg"
             }
         }
         
-        # Show result summary
-        $summaryMsg = "SOA switch completed:`n`n"
-        $summaryMsg += "Successful: $successCount`n"
-        $summaryMsg += "Failed: $failureCount"
+        Write-DebugLog "PHASE 1 Complete: $($soaSwitchSuccess.Count) successful, $($soaSwitchFailed.Count) failed" -Level INFO
         
-        if ($errors.Count -gt 0) {
-            $summaryMsg += "`n`nErrors:`n" + ($errors -join "`n")
+        # === PHASE 2: Clear On-Premises Attributes (only for successful SOA switches) ===
+        if ($soaSwitchSuccess.Count -gt 0) {
+            $StatusBar.Text = "Phase 2/2: Clearing attributes for $($soaSwitchSuccess.Count) cloud-managed user(s)..."
+            Write-DebugLog "PHASE 2: Clearing on-premises attributes for successfully switched users" -Level INFO
+            
+            # Small delay to allow SOA change to propagate
+            Start-Sleep -Milliseconds 500
+            
+            $currentUser = 0
+            foreach ($user in $soaSwitchSuccess) {
+                $currentUser++
+                try {
+                    Write-DebugLog "[$currentUser/$($soaSwitchSuccess.Count)] Clearing attributes for: $($user.UserPrincipalName)" -Level INFO
+                    $StatusBar.Text = "Phase 2/2: Clearing attributes [$currentUser/$($soaSwitchSuccess.Count)] - $($user.UserPrincipalName)"
+                    
+                    # Verify SOA switch by checking current state
+                    $verifyUri = "https://graph.microsoft.com/v1.0/users/$($user.Id)/onPremisesSyncBehavior"
+                    try {
+                        $syncBehavior = Invoke-MgGraphRequest -Method GET -Uri $verifyUri
+                        if ($syncBehavior.isCloudManaged -ne $true) {
+                            throw "SOA verification failed: isCloudManaged is not true"
+                        }
+                        Write-DebugLog "  Verified: isCloudManaged = true" -Level INFO
+                    }
+                    catch {
+                        Write-DebugLog "  Warning: Could not verify SOA state, proceeding with caution: $($_.Exception.Message)" -Level WARNING
+                    }
+                    
+                    # Clear on-premises sync attributes
+                    $clearBody = @{
+                        onPremisesDistinguishedName = ""
+                        onPremisesDomainName = ""
+                        onPremisesSamAccountName = ""
+                        onPremisesUserPrincipalName = ""
+                        onPremisesSecurityIdentifier = ""
+                        onPremisesImmutableId = ""
+                    }
+                    
+                    $clearUri = "https://graph.microsoft.com/v1.0/users/$($user.Id)"
+                    Invoke-MgGraphRequest -Method PATCH -Uri $clearUri -Body $clearBody -ContentType "application/json"
+                    
+                    Write-DebugLog "✓ Successfully cleared on-premises attributes for: $($user.UserPrincipalName)" -Level SUCCESS
+                    $attributeClearSuccess += $user
+                }
+                catch {
+                    $errorMsg = $_.Exception.Message
+                    Write-DebugLog "✗ Failed to clear attributes for $($user.UserPrincipalName): $errorMsg" -Level ERROR
+                    $attributeClearFailed += $user
+                    $errors += "Attribute Clear - $($user.UserPrincipalName): $errorMsg"
+                }
+            }
+            
+            Write-DebugLog "PHASE 2 Complete: $($attributeClearSuccess.Count) successful, $($attributeClearFailed.Count) failed" -Level INFO
+        }
+        else {
+            Write-DebugLog "PHASE 2 Skipped: No users successfully switched SOA" -Level WARNING
         }
         
-        $msgType = if ($failureCount -eq 0) { 
+        # === FINAL SUMMARY ===
+        Write-DebugLog "========================================" -Level INFO
+        Write-DebugLog "SOA Switch Process Complete" -Level INFO
+        Write-DebugLog "Phase 1 (SOA Switch): $($soaSwitchSuccess.Count) successful, $($soaSwitchFailed.Count) failed" -Level INFO
+        Write-DebugLog "Phase 2 (Attribute Clear): $($attributeClearSuccess.Count) successful, $($attributeClearFailed.Count) failed" -Level INFO
+        Write-DebugLog "========================================" -Level INFO
+        
+        $summaryMsg = "SOA Switch Process Completed`n`n"
+        $summaryMsg += "=== PHASE 1: Switch SOA to Cloud ===`n"
+        $summaryMsg += "Successful: $($soaSwitchSuccess.Count)`n"
+        $summaryMsg += "Failed: $($soaSwitchFailed.Count)`n`n"
+        
+        if ($soaSwitchSuccess.Count -gt 0) {
+            $summaryMsg += "=== PHASE 2: Clear On-Premises Attributes ===`n"
+            $summaryMsg += "Successful: $($attributeClearSuccess.Count)`n"
+            $summaryMsg += "Failed: $($attributeClearFailed.Count)`n`n"
+        }
+        
+        $summaryMsg += "=== OVERALL ===`n"
+        $summaryMsg += "Fully Completed: $($attributeClearSuccess.Count) user(s)`n"
+        $summaryMsg += "Partial/Failed: $(($soaSwitchFailed.Count + $attributeClearFailed.Count)) user(s)"
+        
+        if ($errors.Count -gt 0) {
+            $summaryMsg += "`n`n=== ERRORS ===`n" + ($errors -join "`n")
+        }
+        
+        $msgType = if ($errors.Count -eq 0) { 
             [System.Windows.MessageBoxImage]::Information 
-        } elseif ($successCount -eq 0) { 
+        } elseif ($attributeClearSuccess.Count -eq 0) { 
             [System.Windows.MessageBoxImage]::Error 
         } else { 
             [System.Windows.MessageBoxImage]::Warning 
@@ -1180,25 +1279,195 @@ function Switch-UserSOA {
         
         [System.Windows.MessageBox]::Show(
             $summaryMsg,
-            "SOA Switch Complete",
+            "SOA Switch Process Complete",
             [System.Windows.MessageBoxButton]::OK,
             $msgType
         )
         
-        $StatusBar.Text = "SOA switch completed: $successCount successful, $failureCount failed"
-        Write-DebugLog "SOA switch completed: $successCount successful, $failureCount failed" -Level INFO
+        $StatusBar.Text = "SOA switch completed: $($attributeClearSuccess.Count) fully completed, $($errors.Count) errors"
         
-        return $true
+        return $attributeClearSuccess.Count -gt 0
     }
     catch {
         $errorMsg = $_.Exception.Message
-        Write-DebugLog "SOA switch failed: $errorMsg" -Level ERROR
+        Write-DebugLog "CRITICAL ERROR in SOA switch process: $errorMsg" -Level ERROR
         Write-DebugLog "Stack Trace: $($_.ScriptStackTrace)" -Level ERROR
-        $StatusBar.Text = "SOA switch failed: $errorMsg"
+        $StatusBar.Text = "SOA switch process failed: $errorMsg"
         
         [System.Windows.MessageBox]::Show(
-            "Failed to switch Source of Authority:`n`n$errorMsg",
-            "SOA Switch Error",
+            "Failed to complete SOA switch process:`n`n$errorMsg",
+            "SOA Switch Process Error",
+            [System.Windows.MessageBoxButton]::OK,
+            [System.Windows.MessageBoxImage]::Error
+        )
+        
+        return $false
+    }
+}
+
+function Rollback-UserSOA {
+    <#
+    .SYNOPSIS
+    Rolls back the Source of Authority (SOA) for selected users from Cloud to On-Premises
+    This function sets isCloudManaged = false via the onPremisesSyncBehavior endpoint (v1.0 API)
+    
+    .PARAMETER SelectedUsers
+    Array of selected users whose SOA will be rolled back
+    
+    .PARAMETER StatusBar
+    Status bar control to update with progress
+    #>
+    param(
+        [Parameter(Mandatory=$true)]
+        [array]$SelectedUsers,
+        
+        [Parameter(Mandatory=$true)]
+        $StatusBar
+    )
+    
+    try {
+        if ($SelectedUsers.Count -eq 0) {
+            [System.Windows.MessageBox]::Show(
+                "Please select at least one user to rollback Source of Authority.",
+                "No Users Selected",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Warning
+            )
+            return $false
+        }
+        
+        # Strong warning before SOA rollback
+        $result = [System.Windows.MessageBox]::Show(
+            "⚠ CRITICAL WARNING ⚠`n`n" +
+            "You are about to ROLLBACK the Source of Authority (SOA) for $($SelectedUsers.Count) user(s) from Cloud to On-Premises.`n`n" +
+            "WHAT THIS DOES:`n" +
+            "• Sets isCloudManaged = false (SOA reverts to on-premises)`n" +
+            "• Users will be subject to on-premises AD sync again`n" +
+            "• Does NOT restore on-premises attributes (use Restore from Backup separately)`n`n" +
+            "PREREQUISITES:`n" +
+            "✓ Users must currently be cloud-managed (isCloudManaged = true)`n" +
+            "✓ Understand implications of returning to on-premises management`n" +
+            "✓ Ensure on-premises AD is configured to sync these users`n`n" +
+            "USE CASE:`n" +
+            "This rollback is typically used when SOA switch succeeded but attribute clearing failed,`n" +
+            "or when you need to revert a cloud SOA decision.`n`n" +
+            "This operation will use the Microsoft Graph v1.0 endpoint.`n`n" +
+            "Are you sure you want to proceed?",
+            "Rollback Source of Authority",
+            [System.Windows.MessageBoxButton]::YesNo,
+            [System.Windows.MessageBoxImage]::Warning
+        )
+        
+        if ($result -ne [System.Windows.MessageBoxResult]::Yes) {
+            $StatusBar.Text = "SOA rollback cancelled"
+            return $false
+        }
+        
+        Write-DebugLog "========================================" -Level INFO
+        Write-DebugLog "Starting SOA rollback process for $($SelectedUsers.Count) user(s)" -Level INFO
+        Write-DebugLog "========================================" -Level INFO
+        
+        $totalUsers = $SelectedUsers.Count
+        $rollbackSuccess = @()
+        $rollbackFailed = @()
+        $skippedUsers = @()
+        $errors = @()
+        
+        $StatusBar.Text = "Rolling back SOA to on-premises for $totalUsers user(s)..."
+        
+        $currentUser = 0
+        foreach ($user in $SelectedUsers) {
+            $currentUser++
+            try {
+                Write-DebugLog "[$currentUser/$totalUsers] Rolling back SOA for: $($user.UserPrincipalName)" -Level INFO
+                $StatusBar.Text = "Rolling back SOA [$currentUser/$totalUsers] - $($user.UserPrincipalName)"
+                
+                # Verify current SOA state - user must be cloud-managed to rollback
+                $verifyUri = "https://graph.microsoft.com/v1.0/users/$($user.Id)/onPremisesSyncBehavior"
+                try {
+                    $syncBehavior = Invoke-MgGraphRequest -Method GET -Uri $verifyUri
+                    
+                    if ($syncBehavior.isCloudManaged -ne $true) {
+                        Write-DebugLog "⊘ Skipping $($user.UserPrincipalName) - already on-premises managed (isCloudManaged = false)" -Level WARNING
+                        $skippedUsers += $user
+                        continue
+                    }
+                    
+                    Write-DebugLog "  Verified: Currently cloud-managed (isCloudManaged = true)" -Level INFO
+                }
+                catch {
+                    Write-DebugLog "  Warning: Could not verify SOA state: $($_.Exception.Message)" -Level WARNING
+                    # Continue with rollback attempt even if verification fails
+                }
+                
+                # Rollback SOA by setting isCloudManaged = false
+                $updateBody = @{
+                    isCloudManaged = $false
+                }
+                
+                $uri = "https://graph.microsoft.com/v1.0/users/$($user.Id)/onPremisesSyncBehavior"
+                Invoke-MgGraphRequest -Method PATCH -Uri $uri -Body $updateBody -ContentType "application/json"
+                
+                Write-DebugLog "✓ Successfully set isCloudManaged=false for: $($user.UserPrincipalName)" -Level SUCCESS
+                $rollbackSuccess += $user
+            }
+            catch {
+                $errorMsg = $_.Exception.Message
+                Write-DebugLog "✗ Failed to rollback SOA for $($user.UserPrincipalName): $errorMsg" -Level ERROR
+                $rollbackFailed += $user
+                $errors += "$($user.UserPrincipalName): $errorMsg"
+            }
+        }
+        
+        # === FINAL SUMMARY ===
+        Write-DebugLog "========================================" -Level INFO
+        Write-DebugLog "SOA Rollback Process Complete" -Level INFO
+        Write-DebugLog "Successful: $($rollbackSuccess.Count)" -Level INFO
+        Write-DebugLog "Failed: $($rollbackFailed.Count)" -Level INFO
+        Write-DebugLog "Skipped (already on-prem): $($skippedUsers.Count)" -Level INFO
+        Write-DebugLog "========================================" -Level INFO
+        
+        $summaryMsg = "SOA Rollback Process Completed`n`n"
+        $summaryMsg += "Successful: $($rollbackSuccess.Count)`n"
+        $summaryMsg += "Failed: $($rollbackFailed.Count)`n"
+        $summaryMsg += "Skipped (already on-premises): $($skippedUsers.Count)"
+        
+        if ($skippedUsers.Count -gt 0) {
+            $summaryMsg += "`n`nSkipped Users:`n" + (($skippedUsers | ForEach-Object { $_.UserPrincipalName }) -join "`n")
+        }
+        
+        if ($errors.Count -gt 0) {
+            $summaryMsg += "`n`n=== ERRORS ===`n" + ($errors -join "`n")
+        }
+        
+        $msgType = if ($errors.Count -eq 0 -and $skippedUsers.Count -eq 0) { 
+            [System.Windows.MessageBoxImage]::Information 
+        } elseif ($rollbackSuccess.Count -eq 0) { 
+            [System.Windows.MessageBoxImage]::Error 
+        } else { 
+            [System.Windows.MessageBoxImage]::Warning 
+        }
+        
+        [System.Windows.MessageBox]::Show(
+            $summaryMsg,
+            "SOA Rollback Process Complete",
+            [System.Windows.MessageBoxButton]::OK,
+            $msgType
+        )
+        
+        $StatusBar.Text = "SOA rollback completed: $($rollbackSuccess.Count) successful, $($rollbackFailed.Count) failed, $($skippedUsers.Count) skipped"
+        
+        return $rollbackSuccess.Count -gt 0
+    }
+    catch {
+        $errorMsg = $_.Exception.Message
+        Write-DebugLog "CRITICAL ERROR in SOA rollback process: $errorMsg" -Level ERROR
+        Write-DebugLog "Stack Trace: $($_.ScriptStackTrace)" -Level ERROR
+        $StatusBar.Text = "SOA rollback process failed: $errorMsg"
+        
+        [System.Windows.MessageBox]::Show(
+            "Failed to complete SOA rollback process:`n`n$errorMsg",
+            "SOA Rollback Process Error",
             [System.Windows.MessageBoxButton]::OK,
             [System.Windows.MessageBoxImage]::Error
         )
@@ -1270,6 +1539,7 @@ try {
     $txtStatusBar = $window.FindName("txtStatusBar")
     $script:btnClearAttributes = $window.FindName("btnClearAttributes")
     $script:btnSwitchSOA = $window.FindName("btnSwitchSOA")
+    $script:btnRollbackSOA = $window.FindName("btnRollbackSOA")
     $script:btnRestoreBackup = $window.FindName("btnRestoreBackup")
     
     Write-DebugLog "All UI elements bound successfully" -Level SUCCESS
@@ -1330,6 +1600,7 @@ try {
                 $btnSelectNone.IsEnabled = $false
                 $script:btnClearAttributes.IsEnabled = $false
                 $script:btnSwitchSOA.IsEnabled = $false
+                $script:btnRollbackSOA.IsEnabled = $false
                 $script:btnRestoreBackup.IsEnabled = $false
                 $txtTotalCount.Text = "0"
                 $txtFilteredCount.Text = "0"
@@ -1427,6 +1698,7 @@ try {
         $btnBackup.IsEnabled = $false
         $script:btnClearAttributes.IsEnabled = $false
         $script:btnSwitchSOA.IsEnabled = $false
+        $script:btnRollbackSOA.IsEnabled = $false
         
         # Reset counts
         $txtTotalCount.Text = "0"
@@ -1557,6 +1829,13 @@ $dgUsers.Add_PreviewMouseUp({
         Write-DebugLog "Switch SOA button clicked" -Level INFO
         $selectedUsers = Get-SelectedUsers
         Switch-UserSOA -SelectedUsers $selectedUsers -StatusBar $txtStatusBar
+    })
+    
+    # Rollback SOA to On-Premises button click event
+    $script:btnRollbackSOA.Add_Click({
+        Write-DebugLog "Rollback SOA button clicked" -Level INFO
+        $selectedUsers = Get-SelectedUsers
+        Rollback-UserSOA -SelectedUsers $selectedUsers -StatusBar $txtStatusBar
     })
     
     # Restore from Backup button click event

@@ -444,19 +444,51 @@ User-SOA-Switch/
 4. **Document usage** - Keep records of when/why backups were created
 5. **Regular updates** - Keep Microsoft.Graph modules updated
 
+## Technical Details
+
+### Microsoft Graph API Endpoints
+
+This tool uses the **Microsoft Graph v1.0 API** for all operations:
+- **User queries**: `https://graph.microsoft.com/v1.0/users`
+- **SOA management**: `https://graph.microsoft.com/v1.0/users/{id}/onPremisesSyncBehavior`
+- **Attribute operations**: `https://graph.microsoft.com/v1.0/users/{id}`
+
+The `onPremisesSyncBehavior` endpoint is used to manage the Source of Authority:
+- **Switch SOA to Cloud**: Sets `isCloudManaged = true` (Phase 1) and clears on-premises attributes (Phase 2)
+- **Rollback SOA to On-Prem**: Sets `isCloudManaged = false`
+
+### SOA Operation Flow
+
+**Switch to Cloud (Two-Phase):**
+1. **Phase 1**: PATCH to `/onPremisesSyncBehavior` with `{"isCloudManaged": true}`
+2. **Verification**: GET to `/onPremisesSyncBehavior` confirms `isCloudManaged = true`
+3. **Phase 2**: PATCH to `/users/{id}` clears on-premises sync attributes
+
+**Rollback to On-Premises (Single-Phase):**
+1. **Verification**: GET to `/onPremisesSyncBehavior` confirms `isCloudManaged = true`
+2. **Rollback**: PATCH to `/onPremisesSyncBehavior` with `{"isCloudManaged": false}`
+
+All operations use the stable v1.0 endpoint (not beta) and require the `User-OnPremisesSyncBehavior.ReadWrite.All` permission.
+
 ## Known Limitations
 
 - Only retrieves one user at a time (no bulk operations)
 - Requires PowerShell 7+ (not compatible with Windows PowerShell 5.1)
 - Windows-only (due to WPF dependency)
-- SOA switch (`onPremisesSyncEnabled = false`) requires `User-OnPremisesSyncBehavior.ReadWrite.All` permission
+- SOA switch and rollback operations require `User-OnPremisesSyncBehavior.ReadWrite.All` permission
 
 ## Version History
+
+**Version 1.2** (February 2026)
+- Updated all SOA operations to use Microsoft Graph v1.0 endpoint (previously beta)
+- Added `Rollback-UserSOA` function to revert SOA from Cloud back to On-Premises
+- Enhanced verification steps for SOA operations with detailed logging
+- Two-phase SOA switch process with verification between phases
 
 **Version 1.1** (February 2026)
 - Added SOA management workflow: Clear On-Prem Attributes, Switch SOA to Cloud, Restore from Backup
 - Added SOA warning banner with prerequisite sequence guidance
-- Added `Switch-UserSOA` function using Microsoft Graph PATCH API
+- Added `Switch-UserSOA` function using Microsoft Graph v1.0 API
 
 **Version 1.0** (February 23, 2026)
 - Initial release
