@@ -10,6 +10,9 @@ This tool provides a comprehensive interface to:
 - **Filter users by display name** (3+ characters) for quick searches
 - **Select multiple users** via checkboxes (individual, filtered, or all)
 - **Export to JSON** in single file or individual files per user
+- **Clear on-premises attributes** for selected users (SOA prerequisite)
+- **Switch Source of Authority (SOA)** from on-premises to cloud for selected users
+- **Restore user attributes** from a previous JSON backup
 - View real-time counts of total, filtered, and selected users
 
 ## Features
@@ -21,6 +24,12 @@ This tool provides a comprehensive interface to:
 ✅ **Multiple Export Formats**:
    - **Single JSON file** - All users in one array
    - **Individual files** - One JSON per user in timestamped folder
+
+✅ **SOA Management** - Full Source of Authority management workflow:
+   - **Clear On-Prem Attributes** - Nulls on-premises sync attributes for selected users
+   - **Switch SOA to Cloud** - Sets `onPremisesSyncEnabled` to `false` for selected users
+   - **Restore from Backup** - Restores on-premises attributes from a previous JSON backup
+   - **Warning banner** - Prominent prerequisite guidance before running SOA operations
 
 ✅ **Comprehensive Attribute Capture** - Backs up all on-premises sync attributes:
    - Distinguished Name, Domain Name, SAM Account Name
@@ -55,6 +64,8 @@ You must have one of the following Entra ID roles or permissions:
 - Or custom role with the following Graph API permissions:
   - `User.Read.All`
   - `User-OnPremisesSyncBehavior.ReadWrite.All`
+
+> **Note:** `User-OnPremisesSyncBehavior.ReadWrite.All` is required for clearing on-premises attributes and switching SOA. Without this permission those operations will return Access Denied.
 
 ## Installation
 
@@ -126,6 +137,17 @@ You must have one of the following Entra ID roles or permissions:
    - **Single file**: Choose filename and location
    - **Multiple files**: Choose folder (subfolder created automatically)
 
+### SOA Management Workflow
+
+The SOA section (highlighted in amber/yellow) provides the tools to move selected users from on-premises-managed (synced) to cloud-managed. **Always follow this sequence:**
+
+1. **Backup** — Use "Backup Selected Users" to capture all on-premises attributes first.
+2. **Clear On-Prem Attributes** — Click "Clear On-Prem Attributes" to null out the on-premises sync attributes for the selected users. This is a prerequisite before switching SOA.
+3. **Switch SOA to Cloud** — Click "Switch SOA to Cloud" to set `onPremisesSyncEnabled` to `false` for the selected users, handing authority to Entra ID (cloud).
+4. **Restore from Backup** *(if needed)* — If something goes wrong, use "Restore from Backup" to re-apply the saved on-premises attributes from a JSON backup file.
+
+> ⚠ **Warning:** Ensure that each user has been **removed from the on-premises AD sync scope** (e.g., excluded from Azure AD Connect / Entra Cloud Sync) **before** switching SOA. Failure to do so may cause the sync engine to overwrite the changes on the next sync cycle.
+
 6. **Refresh or Continue**
    - Click "Refresh" to reload data from Entra ID
    - Filter and select different users
@@ -160,6 +182,12 @@ You must have one of the following Entra ID roles or permissions:
 - Select all
 - Backup to timestamped folder
 - Maintain historical snapshots for compliance
+
+**Scenario 5: Switch SOA to Cloud**
+- Backup selected users to JSON
+- Clear on-premises attributes for those users
+- Switch SOA to Cloud
+- Verify in Entra ID that `onPremisesSyncEnabled` is `false`
 
 ## Output Formats
 
@@ -421,9 +449,14 @@ User-SOA-Switch/
 - Only retrieves one user at a time (no bulk operations)
 - Requires PowerShell 7+ (not compatible with Windows PowerShell 5.1)
 - Windows-only (due to WPF dependency)
-- Read-only operations (does not modify user attributes)
+- SOA switch (`onPremisesSyncEnabled = false`) requires `User-OnPremisesSyncBehavior.ReadWrite.All` permission
 
 ## Version History
+
+**Version 1.1** (February 2026)
+- Added SOA management workflow: Clear On-Prem Attributes, Switch SOA to Cloud, Restore from Backup
+- Added SOA warning banner with prerequisite sequence guidance
+- Added `Switch-UserSOA` function using Microsoft Graph PATCH API
 
 **Version 1.0** (February 23, 2026)
 - Initial release
