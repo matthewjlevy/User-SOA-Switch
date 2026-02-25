@@ -99,6 +99,13 @@
                     <DataGridTextColumn Header="Display Name" Width="220" Binding="{Binding DisplayName}" IsReadOnly="True"/>
                     <DataGridTextColumn Header="User Principal Name" Width="280" Binding="{Binding UserPrincipalName}" IsReadOnly="True"/>
                     <DataGridTextColumn Header="SAM Account" Width="150" Binding="{Binding OnPremisesSamAccountName}" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="Sync enabled" Width="140" Binding="{Binding OnPremisesSyncEnabled}" IsReadOnly="True">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
                     <DataGridTextColumn Header="Last Sync" Width="160" Binding="{Binding OnPremisesLastSyncDateTime}" IsReadOnly="True"/>
                     <DataGridTextColumn Header="Domain" Width="180" Binding="{Binding OnPremisesDomainName}" IsReadOnly="True"/>
                     <DataGridTextColumn Header="Account Enabled" Width="120" Binding="{Binding AccountEnabled}" IsReadOnly="True"/>

@@ -415,79 +415,88 @@ function Backup-SelectedUsersToJson {
         Write-DebugLog "Starting backup for $($selectedUsers.Count) selected users" -Level INFO
         $StatusBar.Text = "Preparing backup for $($selectedUsers.Count) users..."
         
-        # Show format selection dialog
-        $formatDialog = New-Object System.Windows.Window
-        $formatDialog.Title = "Choose Backup Format"
-        $formatDialog.Width = 450
-        $formatDialog.Height = 250
-        $formatDialog.WindowStartupLocation = "CenterScreen"
-        $formatDialog.ResizeMode = "NoResize"
-        
-        $grid = New-Object System.Windows.Controls.Grid
-        $grid.Margin = "15"
-        
-        $stackPanel = New-Object System.Windows.Controls.StackPanel
-        
-        $labelText = New-Object System.Windows.Controls.TextBlock
-        $labelText.Text = "Select backup format for $($selectedUsers.Count) users:"
-        $labelText.FontWeight = "Bold"
-        $labelText.Margin = "0,0,0,15"
-        $stackPanel.AddChild($labelText)
-        
-        $radioSingle = New-Object System.Windows.Controls.RadioButton
-        $radioSingle.Content = "Single JSON file (all users in one array)"
-        $radioSingle.IsChecked = $true
-        $radioSingle.Margin = "0,0,0,10"
-        $stackPanel.AddChild($radioSingle)
-        
-        $radioMultiple = New-Object System.Windows.Controls.RadioButton
-        $radioMultiple.Content = "Individual JSON files (one file per user in a folder)"
-        $radioMultiple.Margin = "0,0,0,20"
-        $stackPanel.AddChild($radioMultiple)
-        
-        $buttonPanel = New-Object System.Windows.Controls.StackPanel
-        $buttonPanel.Orientation = "Horizontal"
-        $buttonPanel.HorizontalAlignment = "Right"
-        
-        $btnOK = New-Object System.Windows.Controls.Button
-        $btnOK.Content = "Continue"
-        $btnOK.Width = 80
-        $btnOK.Height = 30
-        $btnOK.Margin = "0,0,10,0"
-        $btnOK.IsDefault = $true
-        $btnOK.Add_Click({
-            $formatDialog.DialogResult = $true
-            $formatDialog.Close()
-        })
-        $buttonPanel.AddChild($btnOK)
-        
-        $btnCancel = New-Object System.Windows.Controls.Button
-        $btnCancel.Content = "Cancel"
-        $btnCancel.Width = 80
-        $btnCancel.Height = 30
-        $btnCancel.IsCancel = $true
-        $btnCancel.Add_Click({
-            $formatDialog.DialogResult = $false
-            $formatDialog.Close()
-        })
-        $buttonPanel.AddChild($btnCancel)
-        
-        $stackPanel.AddChild($buttonPanel)
-        $grid.AddChild($stackPanel)
-        $formatDialog.Content = $grid
-        
-        $result = $formatDialog.ShowDialog()
-        
-        if (-not $result) {
-            $StatusBar.Text = "Backup cancelled"
-            Write-DebugLog "Backup cancelled by user" -Level INFO
-            return $false
-        }
-        
         $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
         $context = Get-MgContext
         
-        if ($radioSingle.IsChecked) {
+        # For single user, skip format dialog and use individual file format
+        if ($selectedUsers.Count -eq 1) {
+            Write-DebugLog "Single user selected - defaulting to individual file format" -Level INFO
+            $useSingleFile = $false
+        }
+        else {
+            # Show format selection dialog for multiple users
+            $formatDialog = New-Object System.Windows.Window
+            $formatDialog.Title = "Choose Backup Format"
+            $formatDialog.Width = 450
+            $formatDialog.Height = 250
+            $formatDialog.WindowStartupLocation = "CenterScreen"
+            $formatDialog.ResizeMode = "NoResize"
+            
+            $grid = New-Object System.Windows.Controls.Grid
+            $grid.Margin = "15"
+            
+            $stackPanel = New-Object System.Windows.Controls.StackPanel
+            
+            $labelText = New-Object System.Windows.Controls.TextBlock
+            $labelText.Text = "Select backup format for $($selectedUsers.Count) users:"
+            $labelText.FontWeight = "Bold"
+            $labelText.Margin = "0,0,0,15"
+            $stackPanel.AddChild($labelText)
+            
+            $radioSingle = New-Object System.Windows.Controls.RadioButton
+            $radioSingle.Content = "Single JSON file (all users in one array)"
+            $radioSingle.IsChecked = $true
+            $radioSingle.Margin = "0,0,0,10"
+            $stackPanel.AddChild($radioSingle)
+            
+            $radioMultiple = New-Object System.Windows.Controls.RadioButton
+            $radioMultiple.Content = "Individual JSON files (one file per user in a folder)"
+            $radioMultiple.Margin = "0,0,0,20"
+            $stackPanel.AddChild($radioMultiple)
+            
+            $buttonPanel = New-Object System.Windows.Controls.StackPanel
+            $buttonPanel.Orientation = "Horizontal"
+            $buttonPanel.HorizontalAlignment = "Right"
+            
+            $btnOK = New-Object System.Windows.Controls.Button
+            $btnOK.Content = "Continue"
+            $btnOK.Width = 80
+            $btnOK.Height = 30
+            $btnOK.Margin = "0,0,10,0"
+            $btnOK.IsDefault = $true
+            $btnOK.Add_Click({
+                $formatDialog.DialogResult = $true
+                $formatDialog.Close()
+            })
+            $buttonPanel.AddChild($btnOK)
+            
+            $btnCancel = New-Object System.Windows.Controls.Button
+            $btnCancel.Content = "Cancel"
+            $btnCancel.Width = 80
+            $btnCancel.Height = 30
+            $btnCancel.IsCancel = $true
+            $btnCancel.Add_Click({
+                $formatDialog.DialogResult = $false
+                $formatDialog.Close()
+            })
+            $buttonPanel.AddChild($btnCancel)
+            
+            $stackPanel.AddChild($buttonPanel)
+            $grid.AddChild($stackPanel)
+            $formatDialog.Content = $grid
+            
+            $result = $formatDialog.ShowDialog()
+            
+            if (-not $result) {
+                $StatusBar.Text = "Backup cancelled"
+                Write-DebugLog "Backup cancelled by user" -Level INFO
+                return $false
+            }
+            
+            $useSingleFile = $radioSingle.IsChecked
+        }
+        
+        if ($useSingleFile) {
             # Single JSON file for all users
             Write-DebugLog "User chose single JSON file format" -Level INFO
             
@@ -561,30 +570,26 @@ function Backup-SelectedUsersToJson {
             }
         }
         else {
-            # Individual files in folder
-            Write-DebugLog "User chose individual files format" -Level INFO
+            # Individual file(s)
             
-            Add-Type -AssemblyName System.Windows.Forms
-            $folderDialog = New-Object System.Windows.Forms.FolderBrowserDialog
-            $folderDialog.Description = "Select folder for user backup files"
-            $folderDialog.ShowNewFolderButton = $true
-            
-            if ($folderDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-                $backupFolderName = "UserBackup_${timestamp}"
-                $backupPath = Join-Path $folderDialog.SelectedPath $backupFolderName
-                New-Item -ItemType Directory -Path $backupPath -Force | Out-Null
+            if ($selectedUsers.Count -eq 1) {
+                # Single user - save directly to chosen location without creating folder
+                Write-DebugLog "Single user - saving individual file" -Level INFO
                 
-                Write-DebugLog "Created backup folder: $backupPath" -Level INFO
+                $user = $selectedUsers[0]
+                $safeUpn = ($user.UserPrincipalName -split '@')[0] -replace '[\\/:*?"<>|]', '_'
+                $defaultFileName = "${safeUpn}_${timestamp}.json"
                 
-                $filesCreated = @()
-                $index = 0
+                $saveDialog = New-Object Microsoft.Win32.SaveFileDialog
+                $saveDialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
+                $saveDialog.DefaultExt = ".json"
+                $saveDialog.FileName = $defaultFileName
+                $saveDialog.Title = "Save User Backup"
                 
-                foreach ($user in $selectedUsers) {
-                    $index++
-                    $safeSam = $user.OnPremisesSamAccountName -replace '[\\/:*?"<>|]', '_'
-                    $safeUpn = ($user.UserPrincipalName -split '@')[0] -replace '[\\/:*?"<>|]', '_'
-                    $fileName = "${safeSam}_${safeUpn}_${timestamp}.json"
-                    $filePath = Join-Path $backupPath $fileName
+                $dialogResult = $saveDialog.ShowDialog()
+                
+                if ($dialogResult -eq $true) {
+                    $filePath = $saveDialog.FileName
                     
                     $userBackup = [PSCustomObject]@{
                         BackupMetadata = [PSCustomObject]@{
@@ -593,8 +598,6 @@ function Backup-SelectedUsersToJson {
                             BackedUpBy = $context.Account
                             ToolVersion = "1.0.1"
                             GraphEndpoint = $context.Environment
-                            UserNumber = $index
-                            TotalInBatch = $selectedUsers.Count
                         }
                         UserData = [PSCustomObject]@{
                             Id = $user.Id
@@ -619,35 +622,113 @@ function Backup-SelectedUsersToJson {
                     
                     $json = $userBackup | ConvertTo-Json -Depth 10
                     $json | Out-File -FilePath $filePath -Encoding UTF8 -Force
-                    $filesCreated += $fileName
+                    
+                    Write-DebugLog "Backup saved to: $filePath" -Level SUCCESS
+                    $StatusBar.Text = "Backup saved successfully: $filePath"
+                    
+                    [System.Windows.MessageBox]::Show(
+                        "Successfully backed up user: $($user.DisplayName)!`n`nFile: $filePath",
+                        "Backup Complete",
+                        [System.Windows.MessageBoxButton]::OK,
+                        [System.Windows.MessageBoxImage]::Information
+                    )
+                    
+                    return $true
                 }
-                
-                # Create index file
-                $indexPath = Join-Path $backupPath "_BackupIndex.json"
-                $indexData = [PSCustomObject]@{
-                    BackupDateTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-                    TotalUsers = $selectedUsers.Count
-                    BackedUpBy = $context.Account
-                    Files = $filesCreated
-                    Users = $selectedUsers | Select-Object DisplayName, UserPrincipalName, OnPremisesSamAccountName
+                else {
+                    $StatusBar.Text = "Backup cancelled"
+                    return $false
                 }
-                $indexData | ConvertTo-Json -Depth 5 | Out-File -FilePath $indexPath -Encoding UTF8 -Force
-                
-                Write-DebugLog "Created $($filesCreated.Count) backup files in $backupPath" -Level SUCCESS
-                $StatusBar.Text = "Backup completed: $($filesCreated.Count) files in $backupFolderName"
-                
-                [System.Windows.MessageBox]::Show(
-                    "Successfully backed up $($selectedUsers.Count) users!`n`nLocation: $backupPath`nFiles: $($filesCreated.Count)",
-                    "Backup Complete",
-                    [System.Windows.MessageBoxButton]::OK,
-                    [System.Windows.MessageBoxImage]::Information
-                )
-                
-                return $true
             }
             else {
-                $StatusBar.Text = "Backup cancelled"
-                return $false
+                # Multiple users - create folder with individual files and index
+                Write-DebugLog "Multiple users - creating folder with individual files" -Level INFO
+                
+                Add-Type -AssemblyName System.Windows.Forms
+                $folderDialog = New-Object System.Windows.Forms.FolderBrowserDialog
+                $folderDialog.Description = "Select folder for user backup files"
+                $folderDialog.ShowNewFolderButton = $true
+                
+                if ($folderDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                    $backupFolderName = "UserBackup_${timestamp}"
+                    $backupPath = Join-Path $folderDialog.SelectedPath $backupFolderName
+                    New-Item -ItemType Directory -Path $backupPath -Force | Out-Null
+                    
+                    Write-DebugLog "Created backup folder: $backupPath" -Level INFO
+                    
+                    $filesCreated = @()
+                    $index = 0
+                    
+                    foreach ($user in $selectedUsers) {
+                        $index++
+                        $safeSam = $user.OnPremisesSamAccountName -replace '[\\/:*?"<>|]', '_'
+                        $safeUpn = ($user.UserPrincipalName -split '@')[0] -replace '[\\/:*?"<>|]', '_'
+                        $fileName = "${safeSam}_${safeUpn}_${timestamp}.json"
+                        $filePath = Join-Path $backupPath $fileName
+                        
+                        $userBackup = [PSCustomObject]@{
+                            BackupMetadata = [PSCustomObject]@{
+                                BackupDateTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                                BackupDateTimeUTC = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                                BackedUpBy = $context.Account
+                                ToolVersion = "1.0.1"
+                                GraphEndpoint = $context.Environment
+                                UserNumber = $index
+                                TotalInBatch = $selectedUsers.Count
+                            }
+                            UserData = [PSCustomObject]@{
+                                Id = $user.Id
+                                DisplayName = $user.DisplayName
+                                UserPrincipalName = $user.UserPrincipalName
+                                Mail = $user.Mail
+                                AccountEnabled = $user.AccountEnabled
+                                UserType = $user.UserType
+                            }
+                            OnPremisesSyncAttributes = [PSCustomObject]@{
+                                OnPremisesSyncEnabled = $user.OnPremisesSyncEnabled
+                                OnPremisesLastSyncDateTime = $user.OnPremisesLastSyncDateTime
+                                OnPremisesDistinguishedName = $user.OnPremisesDistinguishedName
+                                OnPremisesDomainName = $user.OnPremisesDomainName
+                                OnPremisesSamAccountName = $user.OnPremisesSamAccountName
+                                OnPremisesUserPrincipalName = $user.OnPremisesUserPrincipalName
+                                OnPremisesSecurityIdentifier = $user.OnPremisesSecurityIdentifier
+                                OnPremisesImmutableId = $user.OnPremisesImmutableId
+                                ProxyAddresses = $user.ProxyAddresses
+                            }
+                        }
+                        
+                        $json = $userBackup | ConvertTo-Json -Depth 10
+                        $json | Out-File -FilePath $filePath -Encoding UTF8 -Force
+                        $filesCreated += $fileName
+                    }
+                    
+                    # Create index file
+                    $indexPath = Join-Path $backupPath "_BackupIndex.json"
+                    $indexData = [PSCustomObject]@{
+                        BackupDateTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                        TotalUsers = $selectedUsers.Count
+                        BackedUpBy = $context.Account
+                        Files = $filesCreated
+                        Users = $selectedUsers | Select-Object DisplayName, UserPrincipalName, OnPremisesSamAccountName
+                    }
+                    $indexData | ConvertTo-Json -Depth 5 | Out-File -FilePath $indexPath -Encoding UTF8 -Force
+                    
+                    Write-DebugLog "Created $($filesCreated.Count) backup files in $backupPath" -Level SUCCESS
+                    $StatusBar.Text = "Backup completed: $($filesCreated.Count) files in $backupFolderName"
+                    
+                    [System.Windows.MessageBox]::Show(
+                        "Successfully backed up $($selectedUsers.Count) users!`n`nLocation: $backupPath`nFiles: $($filesCreated.Count)",
+                        "Backup Complete",
+                        [System.Windows.MessageBoxButton]::OK,
+                        [System.Windows.MessageBoxImage]::Information
+                    )
+                    
+                    return $true
+                }
+                else {
+                    $StatusBar.Text = "Backup cancelled"
+                    return $false
+                }
             }
         }
     }
