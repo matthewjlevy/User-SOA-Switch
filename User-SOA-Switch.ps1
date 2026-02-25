@@ -1022,8 +1022,8 @@ function Restore-UserAttributesFromBackup {
             }
             catch {
                 $errorMsg = $_.Exception.Message
-                Write-DebugLog "Failed to restore $userPrincipalName: $errorMsg" -Level ERROR
-                $errors += "$userPrincipalName: $errorMsg"
+                Write-DebugLog "Failed to restore $($userPrincipalName): $errorMsg" -Level ERROR
+                $errors += "$($userPrincipalName): $errorMsg"
                 $failureCount++
             }
         }
