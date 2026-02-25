@@ -22,6 +22,7 @@ $script:IsConnected = $false
 $script:AllUsers = @()  # Master list of all loaded users
 $script:UserCollection = $null  # ObservableCollection for DataGrid binding
 $script:IsUsersLoaded = $false
+$script:UserMode = "Synced"  # Track current user load mode: "Synced" or "Cloud"
 
 # Debug logging setup
 $script:LogFile = Join-Path $PSScriptRoot "debug_log_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
@@ -284,6 +285,152 @@ function Load-AllSyncedUsers {
         )
         
         return @()
+    }
+}
+
+# Function to load all cloud users (not on-premises sync enabled) from Entra ID
+function Load-AllCloudUsers {
+    param(
+        [System.Windows.Controls.ProgressBar]$ProgressBar,
+        [System.Windows.Controls.TextBlock]$ProgressStatus,
+        [System.Windows.Controls.TextBlock]$ProgressDetail,
+        [System.Windows.Controls.TextBlock]$StatusBar
+    )
+    
+    try {
+        $startTime = Get-Date
+        Write-DebugLog "Starting to load all cloud users (not on-premises sync enabled)" -Level INFO
+        $StatusBar.Text = "Loading cloud users (not on-premises sync enabled) from Entra ID..."
+        
+        $allUsers = @()
+        $properties = @(
+            'Id',
+            'DisplayName',
+            'UserPrincipalName',
+            'Mail',
+            'OnPremisesSyncEnabled',
+            'OnPremisesDistinguishedName',
+            'OnPremisesDomainName',
+            'OnPremisesSamAccountName',
+            'OnPremisesUserPrincipalName',
+            'OnPremisesSecurityIdentifier',
+            'OnPremisesImmutableId',
+            'OnPremisesLastSyncDateTime',
+            'ProxyAddresses',
+            'AccountEnabled',
+            'UserType'
+        )
+        
+        # Query users where onPremisesSyncEnabled is explicitly false (sync was disabled)
+        Write-DebugLog "Querying Graph API with filter: onPremisesSyncEnabled eq false" -Level INFO
+        
+        $users = Get-MgUser -Filter "onPremisesSyncEnabled eq false" `
+                           -All `
+                           -Property $properties `
+                           -ConsistencyLevel eventual `
+                           -CountVariable userCount `
+                           -ErrorAction Stop
+        
+        $total = ($users | Measure-Object).Count
+        Write-DebugLog "Query returned $total cloud users" -Level SUCCESS
+        
+        if ($total -eq 0) {
+            $StatusBar.Text = "No cloud users (with on-premises sync disabled) found in this tenant"
+            Write-DebugLog "No cloud users found" -Level WARNING
+            return @()
+        }
+        
+        # Update progress bar setup
+        $ProgressBar.Maximum = $total
+        $ProgressBar.Value = 0
+        $current = 0
+        
+        # Process users and add IsSelected property
+        foreach ($user in $users) {
+            $current++
+            
+            # Update progress every 50 users or on last user
+            if (($current % 50 -eq 0) -or ($current -eq $total)) {
+                $ProgressBar.Value = $current
+                $ProgressStatus.Text = "Loading cloud users: $current of $total"
+                $percent = [math]::Round(($current / $total) * 100, 1)
+                $ProgressDetail.Text = "$percent% complete"
+                
+                # Allow UI to update
+                [System.Windows.Forms.Application]::DoEvents()
+            }
+            
+            # Create enriched user object with IsSelected property
+            $userObject = [PSCustomObject]@{
+                IsSelected = $false
+                Id = $user.Id
+                DisplayName = $user.DisplayName
+                UserPrincipalName = $user.UserPrincipalName
+                Mail = $user.Mail
+                OnPremisesSyncEnabled = $user.OnPremisesSyncEnabled
+                OnPremisesDistinguishedName = $user.OnPremisesDistinguishedName
+                OnPremisesDomainName = $user.OnPremisesDomainName
+                OnPremisesSamAccountName = $user.OnPremisesSamAccountName
+                OnPremisesUserPrincipalName = $user.OnPremisesUserPrincipalName
+                OnPremisesSecurityIdentifier = $user.OnPremisesSecurityIdentifier
+                OnPremisesImmutableId = $user.OnPremisesImmutableId
+                OnPremisesLastSyncDateTime = $user.OnPremisesLastSyncDateTime
+                ProxyAddresses = $user.ProxyAddresses
+                AccountEnabled = $user.AccountEnabled
+                UserType = $user.UserType
+            }
+            
+            $allUsers += $userObject
+        }
+        
+        $endTime = Get-Date
+        $duration = ($endTime - $startTime).TotalSeconds
+        Write-DebugLog "Loaded $total cloud users in $([math]::Round($duration, 2)) seconds" -Level SUCCESS
+        $StatusBar.Text = "Successfully loaded $total cloud users (on-premises sync disabled)"
+        
+        return $allUsers
+    }
+    catch {
+        $errorMsg = $_.Exception.Message
+        Write-DebugLog "ERROR loading cloud users: $errorMsg" -Level ERROR
+        Write-DebugLog "Exception Type: $($_.Exception.GetType().FullName)" -Level ERROR
+        $StatusBar.Text = "Error loading cloud users: $errorMsg"
+        
+        [System.Windows.MessageBox]::Show(
+            "Failed to load cloud users:`n`n$errorMsg",
+            "Load Error",
+            [System.Windows.MessageBoxButton]::OK,
+            [System.Windows.MessageBoxImage]::Error
+        )
+        
+        return @()
+    }
+}
+
+# Function to update SOA action button visibility based on the current user load mode
+function Update-UIButtonsForMode {
+    param(
+        [ValidateSet('Synced', 'Cloud')]
+        [string]$Mode
+    )
+    
+    $script:UserMode = $Mode
+    
+    if ($Mode -eq "Cloud") {
+        # For cloud users: show btnClearAttributes, hide btnSwitchSOA, show btnRollbackSOA and btnRestoreBackup
+        $script:btnClearAttributes.Visibility = [System.Windows.Visibility]::Visible
+        $script:btnSwitchSOA.Visibility = [System.Windows.Visibility]::Collapsed
+        $script:btnRollbackSOA.Visibility = [System.Windows.Visibility]::Visible
+        $script:btnRestoreBackup.Visibility = [System.Windows.Visibility]::Visible
+        Write-DebugLog "UI updated for Cloud mode: btnSwitchSOA hidden" -Level INFO
+    }
+    else {
+        # For synced users: show all SOA action buttons
+        $script:btnClearAttributes.Visibility = [System.Windows.Visibility]::Visible
+        $script:btnSwitchSOA.Visibility = [System.Windows.Visibility]::Visible
+        $script:btnRollbackSOA.Visibility = [System.Windows.Visibility]::Visible
+        $script:btnRestoreBackup.Visibility = [System.Windows.Visibility]::Visible
+        Write-DebugLog "UI updated for Synced mode: all SOA buttons visible" -Level INFO
     }
 }
 
@@ -1541,6 +1688,7 @@ try {
     $script:btnSwitchSOA = $window.FindName("btnSwitchSOA")
     $script:btnRollbackSOA = $window.FindName("btnRollbackSOA")
     $script:btnRestoreBackup = $window.FindName("btnRestoreBackup")
+    $btnLoadCloudUsers = $window.FindName("btnLoadCloudUsers")
     
     Write-DebugLog "All UI elements bound successfully" -Level SUCCESS
     
@@ -1550,10 +1698,11 @@ try {
         Write-DebugLog "Connect button clicked" -Level INFO
         if (Connect-ToGraph -StatusLabel $lblConnectionStatus -UserLabel $lblConnectedUser -StatusBar $txtStatusBar) {
             $btnLoadUsers.IsEnabled = $true
+            $btnLoadCloudUsers.IsEnabled = $true
             $btnRefresh.IsEnabled = $true
             $btnDisconnect.IsEnabled = $true
             $script:btnRestoreBackup.IsEnabled = $true
-            $txtStatusBar.Text = "Connected to Graph. Click 'Load Synced Users' to begin."
+            $txtStatusBar.Text = "Connected to Graph. Click 'Load Synced Users' or 'Load Cloud Users' to begin."
         }
     })
     
@@ -1591,6 +1740,7 @@ try {
                 $lblConnectedUser.Content = "N/A"
                 $lblConnectedUser.Foreground = "Gray"
                 $btnLoadUsers.IsEnabled = $false
+                $btnLoadCloudUsers.IsEnabled = $false
                 $btnRefresh.IsEnabled = $false
                 $btnDisconnect.IsEnabled = $false
                 $btnBackup.IsEnabled = $false
@@ -1607,6 +1757,7 @@ try {
                 $txtSelectedCount.Text = "0"
                 $btnBackup.Content = "Backup Selected Users (0)"
                 $txtFilterUsers.Text = ""
+                Update-UIButtonsForMode -Mode "Synced"
                 
                 $txtStatusBar.Text = "Disconnected. Click 'Connect to Graph' to sign in with a different account."
                 
@@ -1655,6 +1806,7 @@ try {
             if ($users.Count -gt 0) {
                 $script:AllUsers = $users
                 $script:IsUsersLoaded = $true
+                Update-UIButtonsForMode -Mode "Synced"
                 
                 # Update DataGrid
                 Update-UserGrid -DataGrid $dgUsers -Users $script:AllUsers
@@ -1682,6 +1834,63 @@ try {
         }
     })
     
+    # Load Cloud Users button click event
+    $btnLoadCloudUsers.Add_Click({
+        Write-DebugLog "Load Cloud Users button clicked" -Level INFO
+        
+        if (-not $script:IsConnected) {
+            [System.Windows.MessageBox]::Show(
+                "Please connect to Microsoft Graph first.",
+                "Not Connected",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Warning
+            )
+            return
+        }
+        
+        # Disable buttons and show progress
+        $btnLoadCloudUsers.IsEnabled = $false
+        $btnRefresh.IsEnabled = $false
+        $pnlProgress.Visibility = "Visible"
+        
+        try {
+            # Load all cloud users (not on-premises sync enabled)
+            $users = Load-AllCloudUsers -ProgressBar $pbProgress `
+                                        -ProgressStatus $txtProgressStatus `
+                                        -ProgressDetail $txtProgressDetail `
+                                        -StatusBar $txtStatusBar
+            
+            if ($users.Count -gt 0) {
+                $script:AllUsers = $users
+                $script:IsUsersLoaded = $true
+                Update-UIButtonsForMode -Mode "Cloud"
+                
+                # Update DataGrid
+                Update-UserGrid -DataGrid $dgUsers -Users $script:AllUsers
+                
+                # Update counts
+                $txtTotalCount.Text = $script:AllUsers.Count
+                $txtFilteredCount.Text = $script:AllUsers.Count
+                $txtSelectedCount.Text = "0"
+                
+                # Enable controls
+                $txtFilterUsers.IsEnabled = $true
+                $btnClearFilter.IsEnabled = $true
+                $btnSelectAll.IsEnabled = $true
+                $btnSelectNone.IsEnabled = $true
+                $script:btnRestoreBackup.IsEnabled = $true
+                
+                Write-DebugLog "Cloud user load completed. $($users.Count) users loaded" -Level SUCCESS
+            }
+        }
+        finally {
+            # Hide progress and re-enable buttons
+            $pnlProgress.Visibility = "Collapsed"
+            $btnLoadCloudUsers.IsEnabled = $true
+            $btnRefresh.IsEnabled = $true
+        }
+    })
+    
     # Refresh button click event
     $btnRefresh.Add_Click({
         Write-DebugLog "Refresh button clicked" -Level INFO
@@ -1699,13 +1908,14 @@ try {
         $script:btnClearAttributes.IsEnabled = $false
         $script:btnSwitchSOA.IsEnabled = $false
         $script:btnRollbackSOA.IsEnabled = $false
+        Update-UIButtonsForMode -Mode "Synced"
         
         # Reset counts
         $txtTotalCount.Text = "0"
         $txtFilteredCount.Text = "0"
         $txtSelectedCount.Text = "0"
         
-        $txtStatusBar.Text = "Click 'Load Synced Users' to reload data from Entra ID."
+        $txtStatusBar.Text = "Click 'Load Synced Users' or 'Load Cloud Users' to reload data from Entra ID."
         Write-DebugLog "Data cleared. Ready to reload" -Level INFO
     })
     
