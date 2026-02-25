@@ -577,8 +577,9 @@ function Backup-SelectedUsersToJson {
                 Write-DebugLog "Single user - saving individual file" -Level INFO
                 
                 $user = $selectedUsers[0]
+                $safeSam = $user.OnPremisesSamAccountName -replace '[\\/:*?"<>|]', '_'
                 $safeUpn = ($user.UserPrincipalName -split '@')[0] -replace '[\\/:*?"<>|]', '_'
-                $defaultFileName = "${safeUpn}_${timestamp}.json"
+                $defaultFileName = "${safeSam}_${safeUpn}_${timestamp}.json"
                 
                 $saveDialog = New-Object Microsoft.Win32.SaveFileDialog
                 $saveDialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
@@ -741,6 +742,330 @@ function Backup-SelectedUsersToJson {
         [System.Windows.MessageBox]::Show(
             "Failed to save backup:`n`n$errorMsg",
             "Backup Error",
+            [System.Windows.MessageBoxButton]::OK,
+            [System.Windows.MessageBoxImage]::Error
+        )
+        
+        return $false
+    }
+}
+
+function Clear-OnPremisesAttributes {
+    <#
+    .SYNOPSIS
+    Clears specific on-premises attributes for selected users using Graph API
+    
+    .PARAMETER SelectedUsers
+    Array of selected users to clear attributes for
+    
+    .PARAMETER StatusBar
+    Status bar control to update with progress
+    #>
+    param(
+        [Parameter(Mandatory=$true)]
+        [array]$SelectedUsers,
+        
+        [Parameter(Mandatory=$true)]
+        $StatusBar
+    )
+    
+    try {
+        if ($SelectedUsers.Count -eq 0) {
+            [System.Windows.MessageBox]::Show(
+                "Please select at least one user to clear on-premises attributes.",
+                "No Users Selected",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Warning
+            )
+            return $false
+        }
+        
+        # Confirm action
+        $result = [System.Windows.MessageBox]::Show(
+            "This will clear the following on-premises attributes for $($SelectedUsers.Count) selected user(s):`n`n" +
+            "- OnPremisesDistinguishedName`n" +
+            "- OnPremisesDomainName`n" +
+            "- OnPremisesSamAccountName`n" +
+            "- OnPremisesUserPrincipalName`n" +
+            "- OnPremisesSecurityIdentifier`n" +
+            "- OnPremisesImmutableId`n`n" +
+            "This action cannot be undone. Continue?",
+            "Clear On-Premises Attributes",
+            [System.Windows.MessageBoxButton]::YesNo,
+            [System.Windows.MessageBoxImage]::Warning
+        )
+        
+        if ($result -ne [System.Windows.MessageBoxResult]::Yes) {
+            $StatusBar.Text = "Clear operation cancelled"
+            return $false
+        }
+        
+        Write-DebugLog "Starting clear on-premises attributes for $($SelectedUsers.Count) users" -Level INFO
+        $StatusBar.Text = "Clearing on-premises attributes..."
+        
+        $successCount = 0
+        $failureCount = 0
+        $errors = @()
+        
+        foreach ($user in $SelectedUsers) {
+            try {
+                Write-DebugLog "Clearing attributes for user: $($user.UserPrincipalName)" -Level INFO
+                
+                # Prepare the update body to clear attributes by setting them to null
+                $updateBody = @{
+                    onPremisesDistinguishedName = $null
+                    onPremisesDomainName = $null
+                    onPremisesSamAccountName = $null
+                    onPremisesUserPrincipalName = $null
+                    onPremisesSecurityIdentifier = $null
+                    onPremisesImmutableId = $null
+                }
+                
+                # Use Invoke-MgGraphRequest for PATCH operation
+                $uri = "https://graph.microsoft.com/v1.0/users/$($user.Id)"
+                Invoke-MgGraphRequest -Method PATCH -Uri $uri -Body $updateBody -ContentType "application/json"
+                
+                Write-DebugLog "Successfully cleared attributes for: $($user.UserPrincipalName)" -Level SUCCESS
+                $successCount++
+            }
+            catch {
+                $errorMsg = $_.Exception.Message
+                Write-DebugLog "Failed to clear attributes for $($user.UserPrincipalName): $errorMsg" -Level ERROR
+                $errors += "$($user.UserPrincipalName): $errorMsg"
+                $failureCount++
+            }
+        }
+        
+        # Show result summary
+        $summaryMsg = "Clear operation completed:`n`n"
+        $summaryMsg += "Successful: $successCount`n"
+        $summaryMsg += "Failed: $failureCount"
+        
+        if ($errors.Count -gt 0) {
+            $summaryMsg += "`n`nErrors:`n" + ($errors -join "`n")
+        }
+        
+        $msgType = if ($failureCount -eq 0) { 
+            [System.Windows.MessageBoxImage]::Information 
+        } elseif ($successCount -eq 0) { 
+            [System.Windows.MessageBoxImage]::Error 
+        } else { 
+            [System.Windows.MessageBoxImage]::Warning 
+        }
+        
+        [System.Windows.MessageBox]::Show(
+            $summaryMsg,
+            "Clear Attributes Complete",
+            [System.Windows.MessageBoxButton]::OK,
+            $msgType
+        )
+        
+        $StatusBar.Text = "Clear completed: $successCount successful, $failureCount failed"
+        Write-DebugLog "Clear operation completed: $successCount successful, $failureCount failed" -Level INFO
+        
+        return $true
+    }
+    catch {
+        $errorMsg = $_.Exception.Message
+        Write-DebugLog "Clear operation failed: $errorMsg" -Level ERROR
+        $StatusBar.Text = "Clear operation failed: $errorMsg"
+        
+        [System.Windows.MessageBox]::Show(
+            "Failed to clear on-premises attributes:`n`n$errorMsg",
+            "Clear Error",
+            [System.Windows.MessageBoxButton]::OK,
+            [System.Windows.MessageBoxImage]::Error
+        )
+        
+        return $false
+    }
+}
+
+function Restore-UserAttributesFromBackup {
+    <#
+    .SYNOPSIS
+    Restores user attributes from a backup JSON file or _BackupIndex
+    
+    .PARAMETER StatusBar
+    Status bar control to update with progress
+    #>
+    param(
+        [Parameter(Mandatory=$true)]
+        $StatusBar
+    )
+    
+    try {
+        Write-DebugLog "Starting restore from backup" -Level INFO
+        
+        # Show file selection dialog
+        $openDialog = New-Object Microsoft.Win32.OpenFileDialog
+        $openDialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
+        $openDialog.Title = "Select Backup File to Restore"
+        $openDialog.Multiselect = $false
+        
+        $dialogResult = $openDialog.ShowDialog()
+        
+        if ($dialogResult -ne $true) {
+            $StatusBar.Text = "Restore cancelled"
+            return $false
+        }
+        
+        $backupFile = $openDialog.FileName
+        Write-DebugLog "Selected backup file: $backupFile" -Level INFO
+        $StatusBar.Text = "Loading backup file..."
+        
+        # Load and parse JSON
+        $backupContent = Get-Content -Path $backupFile -Raw | ConvertFrom-Json
+        
+        $usersToRestore = @()
+        
+        # Determine backup file type
+        if ($backupContent.PSObject.Properties.Name -contains 'Files' -and 
+            $backupContent.PSObject.Properties.Name -contains 'Users') {
+            # This is a _BackupIndex file
+            Write-DebugLog "Detected _BackupIndex file with $($backupContent.TotalUsers) users" -Level INFO
+            
+            $backupFolder = Split-Path -Parent $backupFile
+            
+            foreach ($file in $backupContent.Files) {
+                $userFile = Join-Path $backupFolder $file
+                if (Test-Path $userFile) {
+                    $userData = Get-Content -Path $userFile -Raw | ConvertFrom-Json
+                    $usersToRestore += $userData
+                }
+                else {
+                    Write-DebugLog "Warning: Backup file not found: $userFile" -Level WARNING
+                }
+            }
+        }
+        elseif ($backupContent.PSObject.Properties.Name -contains 'BackupMetadata' -and 
+                $backupContent.PSObject.Properties.Name -contains 'Users') {
+            # Single combined backup file with multiple users
+            Write-DebugLog "Detected combined backup file with $($backupContent.Users.Count) users" -Level INFO
+            $usersToRestore = $backupContent.Users
+        }
+        elseif ($backupContent.PSObject.Properties.Name -contains 'BackupMetadata' -and 
+                $backupContent.PSObject.Properties.Name -contains 'UserData') {
+            # Single user backup file
+            Write-DebugLog "Detected single user backup file" -Level INFO
+            $usersToRestore = @($backupContent)
+        }
+        else {
+            throw "Unrecognized backup file format"
+        }
+        
+        if ($usersToRestore.Count -eq 0) {
+            throw "No users found in backup file"
+        }
+        
+        # Confirm restore
+        $result = [System.Windows.MessageBox]::Show(
+            "Found $($usersToRestore.Count) user(s) in backup file.`n`n" +
+            "This will restore the following on-premises attributes:`n" +
+            "- OnPremisesDistinguishedName`n" +
+            "- OnPremisesDomainName`n" +
+            "- OnPremisesSamAccountName`n" +
+            "- OnPremisesUserPrincipalName`n" +
+            "- OnPremisesSecurityIdentifier`n" +
+            "- OnPremisesImmutableId`n" +
+            "- ProxyAddresses`n`n" +
+            "Continue with restore?",
+            "Restore User Attributes",
+            [System.Windows.MessageBoxButton]::YesNo,
+            [System.Windows.MessageBoxImage]::Question
+        )
+        
+        if ($result -ne [System.Windows.MessageBoxResult]::Yes) {
+            $StatusBar.Text = "Restore cancelled"
+            return $false
+        }
+        
+        $StatusBar.Text = "Restoring user attributes..."
+        $successCount = 0
+        $failureCount = 0
+        $errors = @()
+        
+        foreach ($userBackup in $usersToRestore) {
+            try {
+                $userPrincipalName = $userBackup.UserData.UserPrincipalName
+                Write-DebugLog "Restoring attributes for: $userPrincipalName" -Level INFO
+                
+                # Find user in Graph
+                $graphUser = Get-MgUser -Filter "userPrincipalName eq '$userPrincipalName'" -ErrorAction Stop
+                
+                if (-not $graphUser) {
+                    throw "User not found in Entra ID: $userPrincipalName"
+                }
+                
+                # Prepare update body from backup
+                $syncAttrs = $userBackup.OnPremisesSyncAttributes
+                $updateBody = @{
+                    onPremisesDistinguishedName = $syncAttrs.OnPremisesDistinguishedName
+                    onPremisesDomainName = $syncAttrs.OnPremisesDomainName
+                    onPremisesSamAccountName = $syncAttrs.OnPremisesSamAccountName
+                    onPremisesUserPrincipalName = $syncAttrs.OnPremisesUserPrincipalName
+                    onPremisesSecurityIdentifier = $syncAttrs.OnPremisesSecurityIdentifier
+                    onPremisesImmutableId = $syncAttrs.OnPremisesImmutableId
+                }
+                
+                # Add ProxyAddresses if present
+                if ($syncAttrs.ProxyAddresses) {
+                    $updateBody.proxyAddresses = $syncAttrs.ProxyAddresses
+                }
+                
+                # Use Invoke-MgGraphRequest for PATCH operation
+                $uri = "https://graph.microsoft.com/v1.0/users/$($graphUser.Id)"
+                Invoke-MgGraphRequest -Method PATCH -Uri $uri -Body $updateBody -ContentType "application/json"
+                
+                Write-DebugLog "Successfully restored attributes for: $userPrincipalName" -Level SUCCESS
+                $successCount++
+            }
+            catch {
+                $errorMsg = $_.Exception.Message
+                Write-DebugLog "Failed to restore $userPrincipalName: $errorMsg" -Level ERROR
+                $errors += "$userPrincipalName: $errorMsg"
+                $failureCount++
+            }
+        }
+        
+        # Show result summary
+        $summaryMsg = "Restore operation completed:`n`n"
+        $summaryMsg += "Successful: $successCount`n"
+        $summaryMsg += "Failed: $failureCount"
+        
+        if ($errors.Count -gt 0) {
+            $summaryMsg += "`n`nErrors:`n" + ($errors -join "`n")
+        }
+        
+        $msgType = if ($failureCount -eq 0) { 
+            [System.Windows.MessageBoxImage]::Information 
+        } elseif ($successCount -eq 0) { 
+            [System.Windows.MessageBoxImage]::Error 
+        } else { 
+            [System.Windows.MessageBoxImage]::Warning 
+        }
+        
+        [System.Windows.MessageBox]::Show(
+            $summaryMsg,
+            "Restore Complete",
+            [System.Windows.MessageBoxButton]::OK,
+            $msgType
+        )
+        
+        $StatusBar.Text = "Restore completed: $successCount successful, $failureCount failed"
+        Write-DebugLog "Restore operation completed: $successCount successful, $failureCount failed" -Level INFO
+        
+        return $true
+    }
+    catch {
+        $errorMsg = $_.Exception.Message
+        Write-DebugLog "Restore operation failed: $errorMsg" -Level ERROR
+        Write-DebugLog "Stack Trace: $($_.ScriptStackTrace)" -Level ERROR
+        $StatusBar.Text = "Restore operation failed: $errorMsg"
+        
+        [System.Windows.MessageBox]::Show(
+            "Failed to restore from backup:`n`n$errorMsg",
+            "Restore Error",
             [System.Windows.MessageBoxButton]::OK,
             [System.Windows.MessageBoxImage]::Error
         )
