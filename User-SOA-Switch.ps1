@@ -321,10 +321,10 @@ function Load-AllCloudUsers {
             'UserType'
         )
         
-        # Query users where onPremisesSyncEnabled is explicitly false (sync was disabled)
-        Write-DebugLog "Querying Graph API with filter: onPremisesSyncEnabled eq false" -Level INFO
+        # Query users where onPremisesSyncEnabled is null (users that have never been synced from on-premises)
+        Write-DebugLog "Querying Graph API with filter: onPremisesSyncEnabled eq null" -Level INFO
         
-        $users = Get-MgUser -Filter "onPremisesSyncEnabled eq false" `
+        $users = Get-MgUser -Filter "onPremisesSyncEnabled eq null" `
                            -All `
                            -Property $properties `
                            -ConsistencyLevel eventual `
@@ -335,7 +335,7 @@ function Load-AllCloudUsers {
         Write-DebugLog "Query returned $total cloud users" -Level SUCCESS
         
         if ($total -eq 0) {
-            $StatusBar.Text = "No cloud users (with on-premises sync disabled) found in this tenant"
+            $StatusBar.Text = "No cloud users (not on-premises sync enabled) found in this tenant"
             Write-DebugLog "No cloud users found" -Level WARNING
             return @()
         }
@@ -386,7 +386,7 @@ function Load-AllCloudUsers {
         $endTime = Get-Date
         $duration = ($endTime - $startTime).TotalSeconds
         Write-DebugLog "Loaded $total cloud users in $([math]::Round($duration, 2)) seconds" -Level SUCCESS
-        $StatusBar.Text = "Successfully loaded $total cloud users (on-premises sync disabled)"
+        $StatusBar.Text = "Successfully loaded $total cloud users (not on-premises sync enabled)"
         
         return $allUsers
     }
