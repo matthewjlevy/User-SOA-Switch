@@ -23,6 +23,7 @@ $script:AllUsers = @()  # Master list of all loaded users
 $script:UserCollection = $null  # ObservableCollection for DataGrid binding
 $script:IsUsersLoaded = $false
 $script:CurrentUserType = $null  # 'OnPrem' or 'Cloud' based on loaded user set
+$script:ADSyncToolsAvailable = $false  # Tracks whether ADSyncTools module is loaded
 
 # Debug logging setup
 $script:LogFile = Join-Path $PSScriptRoot "debug_log_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
@@ -110,6 +111,54 @@ function Initialize-GraphModule {
         Write-DebugLog "Exception Type: $($_.Exception.GetType().FullName)" -Level ERROR
         Write-DebugLog "Stack Trace: $($_.ScriptStackTrace)" -Level ERROR
         Write-Host "Error initializing Graph modules: $_" -ForegroundColor Red
+        return $false
+    }
+}
+
+# Function to check and import the ADSyncTools module
+function Initialize-ADSyncToolsModule {
+    param()
+    
+    try {
+        Write-DebugLog "Starting ADSyncTools module initialization" -Level INFO
+        Write-Host "Checking for ADSyncTools module..." -ForegroundColor Cyan
+        
+        $moduleName = 'ADSyncTools'
+        
+        # Check if already imported
+        $loadedModule = Get-Module -Name $moduleName
+        if ($loadedModule) {
+            Write-DebugLog "$moduleName v$($loadedModule.Version) is already loaded" -Level SUCCESS
+            Write-Host "$moduleName is already loaded." -ForegroundColor Green
+            $script:ADSyncToolsAvailable = $true
+            return $true
+        }
+        
+        # Check if available on this system
+        $availableModule = Get-Module -ListAvailable -Name $moduleName | Select-Object -First 1
+        
+        if (-not $availableModule) {
+            Write-DebugLog "$moduleName not found. ADSyncTools is installed with Azure AD Connect / Entra Cloud Sync." -Level WARNING
+            Write-Host "WARNING: $moduleName module not found." -ForegroundColor Yellow
+            Write-Host "ADSyncTools is installed with Microsoft Azure AD Connect or Entra Cloud Sync." -ForegroundColor Yellow
+            Write-Host "Clear On-Prem Attributes and Restore from Backup features will be unavailable." -ForegroundColor Yellow
+            $script:ADSyncToolsAvailable = $false
+            return $false
+        }
+        
+        Write-DebugLog "ADSyncTools found. Version: $($availableModule.Version)" -Level INFO
+        Import-Module $moduleName -ErrorAction Stop
+        $imported = Get-Module -Name $moduleName
+        Write-DebugLog "$moduleName v$($imported.Version) imported successfully" -Level SUCCESS
+        Write-Host "$moduleName loaded successfully." -ForegroundColor Green
+        $script:ADSyncToolsAvailable = $true
+        return $true
+    }
+    catch {
+        $errorMsg = $_.Exception.Message
+        Write-DebugLog "ERROR initializing ADSyncTools module: $errorMsg" -Level ERROR
+        Write-Host "Error initializing ADSyncTools module: $_" -ForegroundColor Red
+        $script:ADSyncToolsAvailable = $false
         return $false
     }
 }
@@ -929,6 +978,19 @@ function Clear-OnPremisesAttributes {
             return $false
         }
         
+        # Check ADSyncTools availability
+        if (-not $script:ADSyncToolsAvailable) {
+            [System.Windows.MessageBox]::Show(
+                "The ADSyncTools module is not available on this system.`n`n" +
+                "ADSyncTools is required for clearing on-premises attributes.`n" +
+                "Please run this script on a server with Azure AD Connect or Entra Cloud Sync installed.",
+                "ADSyncTools Not Available",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Error
+            )
+            return $false
+        }
+        
         # Confirm action
         $result = [System.Windows.MessageBox]::Show(
             "This will clear the following on-premises attributes for $($SelectedUsers.Count) selected user(s):`n`n" +
@@ -960,19 +1022,14 @@ function Clear-OnPremisesAttributes {
             try {
                 Write-DebugLog "Clearing attributes for user: $($user.UserPrincipalName)" -Level INFO
                 
-                # Prepare the update body to clear attributes by setting them to null
-                $updateBody = @{
-                    onPremisesDistinguishedName = $null
-                    onPremisesDomainName = $null
-                    onPremisesSamAccountName = $null
-                    onPremisesUserPrincipalName = $null
-                    onPremisesSecurityIdentifier = $null
-                    onPremisesImmutableId = $null
-                }
-                
-                # Use Invoke-MgGraphRequest for PATCH operation
-                $uri = "https://graph.microsoft.com/v1.0/users/$($user.Id)"
-                Invoke-MgGraphRequest -Method PATCH -Uri $uri -Body $updateBody -ContentType "application/json"
+                # Use Clear-ADSyncToolsOnPremisesAttribute to clear on-premises attributes
+                Clear-ADSyncToolsOnPremisesAttribute -Id $user.Id `
+                    -onPremisesDistinguishedName `
+                    -onPremisesDomainName `
+                    -onPremisesImmutableId `
+                    -onPremisesSamAccountName `
+                    -onPremisesSecurityIdentifier `
+                    -onPremisesUserPrincipalName
                 
                 Write-DebugLog "Successfully cleared attributes for: $($user.UserPrincipalName)" -Level SUCCESS
                 $successCount++
@@ -1045,6 +1102,19 @@ function Restore-UserAttributesFromBackup {
     
     try {
         Write-DebugLog "Starting restore from backup" -Level INFO
+        
+        # Check ADSyncTools availability
+        if (-not $script:ADSyncToolsAvailable) {
+            [System.Windows.MessageBox]::Show(
+                "The ADSyncTools module is not available on this system.`n`n" +
+                "ADSyncTools is required for restoring on-premises attributes from backup.`n" +
+                "Please run this script on a server with Azure AD Connect or Entra Cloud Sync installed.",
+                "ADSyncTools Not Available",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Error
+            )
+            return $false
+        }
         
         # Show file selection dialog
         $openDialog = New-Object Microsoft.Win32.OpenFileDialog
@@ -1146,25 +1216,15 @@ function Restore-UserAttributesFromBackup {
                     throw "User not found in Entra ID: $userPrincipalName"
                 }
                 
-                # Prepare update body from backup
+                # Restore on-premises attributes from backup using Set-ADSyncToolsOnPremisesAttribute
                 $syncAttrs = $userBackup.OnPremisesSyncAttributes
-                $updateBody = @{
-                    onPremisesDistinguishedName = $syncAttrs.OnPremisesDistinguishedName
-                    onPremisesDomainName = $syncAttrs.OnPremisesDomainName
-                    onPremisesSamAccountName = $syncAttrs.OnPremisesSamAccountName
-                    onPremisesUserPrincipalName = $syncAttrs.OnPremisesUserPrincipalName
-                    onPremisesSecurityIdentifier = $syncAttrs.OnPremisesSecurityIdentifier
-                    onPremisesImmutableId = $syncAttrs.OnPremisesImmutableId
-                }
-                
-                # Add ProxyAddresses if present
-                if ($syncAttrs.ProxyAddresses) {
-                    $updateBody.proxyAddresses = $syncAttrs.ProxyAddresses
-                }
-                
-                # Use Invoke-MgGraphRequest for PATCH operation
-                $uri = "https://graph.microsoft.com/v1.0/users/$($graphUser.Id)"
-                Invoke-MgGraphRequest -Method PATCH -Uri $uri -Body $updateBody -ContentType "application/json"
+                Set-ADSyncToolsOnPremisesAttribute -Id $graphUser.Id `
+                    -onPremisesDistinguishedName $syncAttrs.OnPremisesDistinguishedName `
+                    -onPremisesDomainName $syncAttrs.OnPremisesDomainName `
+                    -onPremisesImmutableId $syncAttrs.OnPremisesImmutableId `
+                    -onPremisesSamAccountName $syncAttrs.OnPremisesSamAccountName `
+                    -onPremisesSecurityIdentifier $syncAttrs.OnPremisesSecurityIdentifier `
+                    -onPremisesUserPrincipalName $syncAttrs.OnPremisesUserPrincipalName
                 
                 Write-DebugLog "Successfully restored attributes for: $userPrincipalName" -Level SUCCESS
                 $successCount++
@@ -1351,18 +1411,14 @@ function Switch-UserSOA {
                         Write-DebugLog "  Warning: Could not verify SOA state, proceeding with caution: $($_.Exception.Message)" -Level WARNING
                     }
                     
-                    # Clear on-premises sync attributes
-                    $clearBody = @{
-                        onPremisesDistinguishedName = ""
-                        onPremisesDomainName = ""
-                        onPremisesSamAccountName = ""
-                        onPremisesUserPrincipalName = ""
-                        onPremisesSecurityIdentifier = ""
-                        onPremisesImmutableId = ""
-                    }
-                    
-                    $clearUri = "https://graph.microsoft.com/v1.0/users/$($user.Id)"
-                    Invoke-MgGraphRequest -Method PATCH -Uri $clearUri -Body $clearBody -ContentType "application/json"
+                    # Clear on-premises sync attributes using Clear-ADSyncToolsOnPremisesAttribute
+                    Clear-ADSyncToolsOnPremisesAttribute -Id $user.Id `
+                        -onPremisesDistinguishedName `
+                        -onPremisesDomainName `
+                        -onPremisesImmutableId `
+                        -onPremisesSamAccountName `
+                        -onPremisesSecurityIdentifier `
+                        -onPremisesUserPrincipalName
                     
                     Write-DebugLog "✓ Successfully cleared on-premises attributes for: $($user.UserPrincipalName)" -Level SUCCESS
                     $attributeClearSuccess += $user
@@ -1632,6 +1688,9 @@ try {
     if (-not (Initialize-GraphModule)) {
         throw "Failed to initialize Microsoft Graph modules"
     }
+    
+    # Initialize ADSyncTools module (non-fatal if not available)
+    Initialize-ADSyncToolsModule | Out-Null
     
     # Load XAML
     $xamlPath = Join-Path $PSScriptRoot "UserBackupUI.xaml"

@@ -56,6 +56,9 @@ The script will automatically install these if missing:
 - `Microsoft.Graph.Authentication`
 - `Microsoft.Graph.Users`
 
+The following module must be installed manually (included with Azure AD Connect / Entra Cloud Sync):
+- `ADSyncTools` — required for **Clear On-Prem Attributes** and **Restore from Backup** operations
+
 ### Required Permissions
 You must have one of the following Entra ID roles or permissions:
 - Global Administrator
@@ -327,6 +330,21 @@ UserBackup_20260224_103045/
 
 ## Troubleshooting
 
+### ADSyncTools Module Not Found
+
+**Problem:** "ADSyncTools Not Available" error when clicking Clear On-Prem Attributes or Restore from Backup  
+**Solution:**
+- The `ADSyncTools` module is installed as part of **Microsoft Azure AD Connect** or **Entra Cloud Sync**
+- Run this script on the server where Azure AD Connect or Entra Cloud Sync is installed
+- To verify the module is available:
+```powershell
+Get-Module -ListAvailable -Name ADSyncTools
+```
+- If it is available but not loading, import it manually:
+```powershell
+Import-Module ADSyncTools
+```
+
 ### Module Installation Issues
 
 **Problem:** Script fails to install Microsoft.Graph modules  
@@ -451,24 +469,43 @@ User-SOA-Switch/
 This tool uses the **Microsoft Graph v1.0 API** for all operations:
 - **User queries**: `https://graph.microsoft.com/v1.0/users`
 - **SOA management**: `https://graph.microsoft.com/v1.0/users/{id}/onPremisesSyncBehavior`
-- **Attribute operations**: `https://graph.microsoft.com/v1.0/users/{id}`
 
 The `onPremisesSyncBehavior` endpoint is used to manage the Source of Authority:
-- **Switch SOA to Cloud**: Sets `isCloudManaged = true` (Phase 1) and clears on-premises attributes (Phase 2)
+- **Switch SOA to Cloud**: Sets `isCloudManaged = true` (Phase 1) and clears on-premises attributes using ADSyncTools (Phase 2)
 - **Rollback SOA to On-Prem**: Sets `isCloudManaged = false`
+
+### ADSyncTools Cmdlets
+
+On-premises user attributes are **read-only** via the Microsoft Graph API. To clear or restore them, this tool uses the **ADSyncTools** PowerShell module (included with Azure AD Connect / Entra Cloud Sync):
+
+- **Clear attributes**: `Clear-ADSyncToolsOnPremisesAttribute`
+  ```
+  Clear-ADSyncToolsOnPremisesAttribute [-Id] <String>
+      [[-onPremisesDistinguishedName]] [[-onPremisesDomainName]]
+      [[-onPremisesImmutableId]] [[-onPremisesSamAccountName]]
+      [[-onPremisesSecurityIdentifier]] [[-onPremisesUserPrincipalName]]
+  ```
+
+- **Restore attributes**: `Set-ADSyncToolsOnPremisesAttribute`
+  ```
+  Set-ADSyncToolsOnPremisesAttribute [-Id] <String>
+      [[-onPremisesDistinguishedName] <String>] [[-onPremisesDomainName] <String>]
+      [[-onPremisesImmutableId] <String>] [[-onPremisesSamAccountName] <String>]
+      [[-onPremisesSecurityIdentifier] <String>] [[-onPremisesUserPrincipalName] <String>]
+  ```
 
 ### SOA Operation Flow
 
 **Switch to Cloud (Two-Phase):**
 1. **Phase 1**: PATCH to `/onPremisesSyncBehavior` with `{"isCloudManaged": true}`
 2. **Verification**: GET to `/onPremisesSyncBehavior` confirms `isCloudManaged = true`
-3. **Phase 2**: PATCH to `/users/{id}` clears on-premises sync attributes
+3. **Phase 2**: `Clear-ADSyncToolsOnPremisesAttribute` clears on-premises sync attributes
 
 **Rollback to On-Premises (Single-Phase):**
 1. **Verification**: GET to `/onPremisesSyncBehavior` confirms `isCloudManaged = true`
 2. **Rollback**: PATCH to `/onPremisesSyncBehavior` with `{"isCloudManaged": false}`
 
-All operations use the stable v1.0 endpoint (not beta) and require the `User-OnPremisesSyncBehavior.ReadWrite.All` permission.
+All SOA management operations use the stable v1.0 endpoint (not beta) and require the `User-OnPremisesSyncBehavior.ReadWrite.All` permission.
 
 ## Known Limitations
 
@@ -476,8 +513,15 @@ All operations use the stable v1.0 endpoint (not beta) and require the `User-OnP
 - Requires PowerShell 7+ (not compatible with Windows PowerShell 5.1)
 - Windows-only (due to WPF dependency)
 - SOA switch and rollback operations require `User-OnPremisesSyncBehavior.ReadWrite.All` permission
+- Clear On-Prem Attributes and Restore from Backup require the `ADSyncTools` module (installed with Azure AD Connect / Entra Cloud Sync)
 
 ## Version History
+
+**Version 1.3** (February 2026)
+- Replaced read-only Graph API PATCH calls with `Clear-ADSyncToolsOnPremisesAttribute` for clearing on-premises attributes
+- Replaced Graph API PATCH calls with `Set-ADSyncToolsOnPremisesAttribute` for restoring on-premises attributes from backup
+- Added `Initialize-ADSyncToolsModule` function for ADSyncTools module management
+- Updated README to document ADSyncTools module dependency
 
 **Version 1.2** (February 2026)
 - Updated all SOA operations to use Microsoft Graph v1.0 endpoint (previously beta)
