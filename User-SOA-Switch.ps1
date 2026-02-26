@@ -115,7 +115,7 @@ function Initialize-GraphModule {
     }
 }
 
-# Function to check and import the ADSyncTools module
+# Function to check and install ADSyncTools module
 function Initialize-ADSyncToolsModule {
     param()
     
@@ -138,21 +138,42 @@ function Initialize-ADSyncToolsModule {
         $availableModule = Get-Module -ListAvailable -Name $moduleName | Select-Object -First 1
         
         if (-not $availableModule) {
-            Write-DebugLog "$moduleName not found. ADSyncTools is installed with Azure AD Connect / Entra Cloud Sync." -Level WARNING
-            Write-Host "WARNING: $moduleName module not found." -ForegroundColor Yellow
-            Write-Host "ADSyncTools is installed with Microsoft Azure AD Connect or Entra Cloud Sync." -ForegroundColor Yellow
-            Write-Host "Clear On-Prem Attributes and Restore from Backup features will be unavailable." -ForegroundColor Yellow
+            Write-DebugLog "$moduleName not found. Installing from PowerShell Gallery..." -Level WARNING
+            Write-Host "$moduleName not found. Installing from PowerShell Gallery..." -ForegroundColor Yellow
+            
+            try {
+                Install-Module -Name $moduleName -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+                Write-DebugLog "$moduleName installed successfully from PowerShell Gallery" -Level SUCCESS
+                Write-Host "$moduleName installed successfully." -ForegroundColor Green
+                
+                # Re-check for the newly installed module
+                $availableModule = Get-Module -ListAvailable -Name $moduleName | Select-Object -First 1
+            }
+            catch {
+                $installError = $_.Exception.Message
+                Write-DebugLog "Failed to install $moduleName from PowerShell Gallery: $installError" -Level ERROR
+                Write-Host "ERROR: Failed to install $moduleName from PowerShell Gallery." -ForegroundColor Red
+                Write-Host "Error: $installError" -ForegroundColor Red
+                Write-Host "Clear On-Prem Attributes and Restore from Backup features will be unavailable." -ForegroundColor Yellow
+                $script:ADSyncToolsAvailable = $false
+                return $false
+            }
+        }
+        
+        if ($availableModule) {
+            Write-DebugLog "$moduleName found. Version: $($availableModule.Version)" -Level INFO
+            Import-Module $moduleName -ErrorAction Stop
+            $imported = Get-Module -Name $moduleName
+            Write-DebugLog "$moduleName v$($imported.Version) imported successfully" -Level SUCCESS
+            Write-Host "$moduleName loaded successfully." -ForegroundColor Green
+            $script:ADSyncToolsAvailable = $true
+            return $true
+        }
+        else {
+            Write-DebugLog "$moduleName still not available after installation attempt" -Level ERROR
             $script:ADSyncToolsAvailable = $false
             return $false
         }
-        
-        Write-DebugLog "ADSyncTools found. Version: $($availableModule.Version)" -Level INFO
-        Import-Module $moduleName -ErrorAction Stop
-        $imported = Get-Module -Name $moduleName
-        Write-DebugLog "$moduleName v$($imported.Version) imported successfully" -Level SUCCESS
-        Write-Host "$moduleName loaded successfully." -ForegroundColor Green
-        $script:ADSyncToolsAvailable = $true
-        return $true
     }
     catch {
         $errorMsg = $_.Exception.Message
@@ -983,7 +1004,8 @@ function Clear-OnPremisesAttributes {
             [System.Windows.MessageBox]::Show(
                 "The ADSyncTools module is not available on this system.`n`n" +
                 "ADSyncTools is required for clearing on-premises attributes.`n" +
-                "Please run this script on a server with Azure AD Connect or Entra Cloud Sync installed.",
+                "The script attempted to install it automatically but was unsuccessful.`n`n" +
+                "Please try installing manually: Install-Module ADSyncTools -Scope CurrentUser",
                 "ADSyncTools Not Available",
                 [System.Windows.MessageBoxButton]::OK,
                 [System.Windows.MessageBoxImage]::Error
@@ -1108,7 +1130,8 @@ function Restore-UserAttributesFromBackup {
             [System.Windows.MessageBox]::Show(
                 "The ADSyncTools module is not available on this system.`n`n" +
                 "ADSyncTools is required for restoring on-premises attributes from backup.`n" +
-                "Please run this script on a server with Azure AD Connect or Entra Cloud Sync installed.",
+                "The script attempted to install it automatically but was unsuccessful.`n`n" +
+                "Please try installing manually: Install-Module ADSyncTools -Scope CurrentUser",
                 "ADSyncTools Not Available",
                 [System.Windows.MessageBoxButton]::OK,
                 [System.Windows.MessageBoxImage]::Error

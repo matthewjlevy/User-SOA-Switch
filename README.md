@@ -52,12 +52,12 @@ This tool provides a comprehensive interface to:
 - **Windows 10/11** or **Windows Server 2016+**
 
 ### Required PowerShell Modules
-The script will automatically install these if missing:
+The script will automatically install these from PowerShell Gallery if missing:
 - `Microsoft.Graph.Authentication`
 - `Microsoft.Graph.Users`
-
-The following module must be installed manually (included with Azure AD Connect / Entra Cloud Sync):
 - `ADSyncTools` — required for **Clear On-Prem Attributes** and **Restore from Backup** operations
+
+> **Note:** ADSyncTools is also bundled with Azure AD Connect / Entra Cloud Sync. If already installed from those sources, the script will use the existing installation.
 
 ### Required Permissions
 You must have one of the following Entra ID roles or permissions:
@@ -334,8 +334,11 @@ UserBackup_20260224_103045/
 
 **Problem:** "ADSyncTools Not Available" error when clicking Clear On-Prem Attributes or Restore from Backup  
 **Solution:**
-- The `ADSyncTools` module is installed as part of **Microsoft Azure AD Connect** or **Entra Cloud Sync**
-- Run this script on the server where Azure AD Connect or Entra Cloud Sync is installed
+- The script will automatically attempt to install `ADSyncTools` from PowerShell Gallery on first run
+- If auto-installation fails, manually install it:
+```powershell
+Install-Module ADSyncTools -Scope CurrentUser -Force
+```
 - To verify the module is available:
 ```powershell
 Get-Module -ListAvailable -Name ADSyncTools
@@ -344,6 +347,7 @@ Get-Module -ListAvailable -Name ADSyncTools
 ```powershell
 Import-Module ADSyncTools
 ```
+- **Note:** ADSyncTools is also bundled with Azure AD Connect / Entra Cloud Sync installations
 
 ### Module Installation Issues
 
@@ -476,7 +480,7 @@ The `onPremisesSyncBehavior` endpoint is used to manage the Source of Authority:
 
 ### ADSyncTools Cmdlets
 
-On-premises user attributes are **read-only** via the Microsoft Graph API. To clear or restore them, this tool uses the **ADSyncTools** PowerShell module (included with Azure AD Connect / Entra Cloud Sync):
+On-premises user attributes are **read-only** via the Microsoft Graph API. To clear or restore them, this tool uses the **ADSyncTools** PowerShell module (available from PowerShell Gallery or bundled with Azure AD Connect / Entra Cloud Sync):
 
 - **Clear attributes**: `Clear-ADSyncToolsOnPremisesAttribute`
   ```
@@ -513,15 +517,16 @@ All SOA management operations use the stable v1.0 endpoint (not beta) and requir
 - Requires PowerShell 7+ (not compatible with Windows PowerShell 5.1)
 - Windows-only (due to WPF dependency)
 - SOA switch and rollback operations require `User-OnPremisesSyncBehavior.ReadWrite.All` permission
-- Clear On-Prem Attributes and Restore from Backup require the `ADSyncTools` module (installed with Azure AD Connect / Entra Cloud Sync)
+- Clear On-Prem Attributes and Restore from Backup require the `ADSyncTools` module (auto-installed from PowerShell Gallery if not present)
 
 ## Version History
 
 **Version 1.3** (February 2026)
 - Replaced read-only Graph API PATCH calls with `Clear-ADSyncToolsOnPremisesAttribute` for clearing on-premises attributes
 - Replaced Graph API PATCH calls with `Set-ADSyncToolsOnPremisesAttribute` for restoring on-premises attributes from backup
-- Added `Initialize-ADSyncToolsModule` function for ADSyncTools module management
-- Updated README to document ADSyncTools module dependency
+- Added `Initialize-ADSyncToolsModule` function with auto-installation from PowerShell Gallery
+- ADSyncTools module automatically installs from PowerShell Gallery if not present
+- Updated README to document ADSyncTools module auto-installation support
 
 **Version 1.2** (February 2026)
 - Updated all SOA operations to use Microsoft Graph v1.0 endpoint (previously beta)
