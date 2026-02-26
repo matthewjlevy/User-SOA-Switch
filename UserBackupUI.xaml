@@ -33,8 +33,6 @@
                         Height="35" Margin="5,0" IsEnabled="False" FontWeight="Bold"/>
                 <Button Name="btnLoadCloudUsers" Grid.Column="3" Content="Load Cloud Users" 
                         Height="35" Margin="5,0" IsEnabled="False" FontWeight="Bold"/>
-                <Button Name="btnRefresh" Grid.Column="4" Content="Refresh" 
-                        Height="35" Margin="5,0,0,0" IsEnabled="False" HorizontalAlignment="Left" Width="100"/>
             </Grid>
         </GroupBox>
 
@@ -101,9 +99,17 @@
                       HorizontalScrollBarVisibility="Auto">
                 <DataGrid.Columns>
                     <DataGridCheckBoxColumn Header="✓" Width="40" Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, NotifyOnSourceUpdated=True}"/>
-                    <DataGridTextColumn Header="Display Name" Width="220" Binding="{Binding DisplayName}" IsReadOnly="True"/>
-                    <DataGridTextColumn Header="User Principal Name" Width="280" Binding="{Binding UserPrincipalName}" IsReadOnly="True"/>
-                    <DataGridTextColumn Header="SAM Account" Width="150" Binding="{Binding OnPremisesSamAccountName}" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="Display Name" Width="200" Binding="{Binding DisplayName}" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="User Principal Name" Width="250" Binding="{Binding UserPrincipalName}" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="SAM Account" Width="130" Binding="{Binding OnPremisesSamAccountName}" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="Is Cloud Managed" Width="130" Binding="{Binding IsCloudManaged}" IsReadOnly="True">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
                     <DataGridTextColumn Header="On-Premises Sync Enabled" Width="180" Binding="{Binding OnPremisesSyncEnabled}" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
@@ -111,9 +117,9 @@
                             </Style>
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
-                    <DataGridTextColumn Header="Last Sync" Width="160" Binding="{Binding OnPremisesLastSyncDateTime}" IsReadOnly="True"/>
-                    <DataGridTextColumn Header="Domain" Width="180" Binding="{Binding OnPremisesDomainName}" IsReadOnly="True"/>
-                    <DataGridTextColumn Header="Account Enabled" Width="120" Binding="{Binding AccountEnabled}" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="Last Sync" Width="150" Binding="{Binding OnPremisesLastSyncDateTime}" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="Domain" Width="160" Binding="{Binding OnPremisesDomainName}" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="Account Enabled" Width="110" Binding="{Binding AccountEnabled}" IsReadOnly="True"/>
                 </DataGrid.Columns>
             </DataGrid>
             

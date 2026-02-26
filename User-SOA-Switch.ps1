@@ -311,6 +311,20 @@ function Load-AllSyncedUsers {
                 [System.Windows.Forms.Application]::DoEvents()
             }
             
+            # Query isCloudManaged from onPremisesSyncBehavior endpoint
+            $isCloudManaged = "Unknown"
+            try {
+                $syncBehaviorUri = "https://graph.microsoft.com/v1.0/users/$($user.Id)/onPremisesSyncBehavior"
+                $syncBehavior = Invoke-MgGraphRequest -Method GET -Uri $syncBehaviorUri -ErrorAction SilentlyContinue
+                if ($null -ne $syncBehavior -and $null -ne $syncBehavior.isCloudManaged) {
+                    $isCloudManaged = if ($syncBehavior.isCloudManaged -eq $true) { "True" } else { "False" }
+                }
+            }
+            catch {
+                # If endpoint doesn't exist or errors, leave as Unknown
+                $isCloudManaged = "Unknown"
+            }
+            
             # Create enriched user object with IsSelected property
             $userObject = [PSCustomObject]@{
                 IsSelected = $false
@@ -318,6 +332,7 @@ function Load-AllSyncedUsers {
                 DisplayName = $user.DisplayName
                 UserPrincipalName = $user.UserPrincipalName
                 Mail = $user.Mail
+                IsCloudManaged = $isCloudManaged
                 OnPremisesSyncEnabled = $user.OnPremisesSyncEnabled
                 OnPremisesDistinguishedName = $user.OnPremisesDistinguishedName
                 OnPremisesDomainName = $user.OnPremisesDomainName
@@ -424,12 +439,27 @@ function Load-AllCloudUsers {
                 [System.Windows.Forms.Application]::DoEvents()
             }
             
+            # Query isCloudManaged from onPremisesSyncBehavior endpoint
+            $isCloudManaged = "Unknown"
+            try {
+                $syncBehaviorUri = "https://graph.microsoft.com/v1.0/users/$($user.Id)/onPremisesSyncBehavior"
+                $syncBehavior = Invoke-MgGraphRequest -Method GET -Uri $syncBehaviorUri -ErrorAction SilentlyContinue
+                if ($null -ne $syncBehavior -and $null -ne $syncBehavior.isCloudManaged) {
+                    $isCloudManaged = if ($syncBehavior.isCloudManaged -eq $true) { "True" } else { "False" }
+                }
+            }
+            catch {
+                # If endpoint doesn't exist or errors, leave as Unknown
+                $isCloudManaged = "Unknown"
+            }
+            
             $userObject = [PSCustomObject]@{
                 IsSelected = $false
                 Id = $user.Id
                 DisplayName = $user.DisplayName
                 UserPrincipalName = $user.UserPrincipalName
                 Mail = $user.Mail
+                IsCloudManaged = $isCloudManaged
                 OnPremisesSyncEnabled = $user.OnPremisesSyncEnabled
                 OnPremisesDistinguishedName = $user.OnPremisesDistinguishedName
                 OnPremisesDomainName = $user.OnPremisesDomainName
@@ -1740,7 +1770,6 @@ try {
     $btnDisconnect = $window.FindName("btnDisconnect")
     $btnLoadUsers = $window.FindName("btnLoadUsers")
     $btnLoadCloudUsers = $window.FindName("btnLoadCloudUsers")
-    $btnRefresh = $window.FindName("btnRefresh")
     $lblConnectionStatus = $window.FindName("lblConnectionStatus")
     $lblConnectedUser = $window.FindName("lblConnectedUser")
     $txtFilterUsers = $window.FindName("txtFilterUsers")
@@ -1772,7 +1801,6 @@ try {
         if (Connect-ToGraph -StatusLabel $lblConnectionStatus -UserLabel $lblConnectedUser -StatusBar $txtStatusBar) {
             $btnLoadUsers.IsEnabled = $true
             $btnLoadCloudUsers.IsEnabled = $true
-            $btnRefresh.IsEnabled = $true
             $btnDisconnect.IsEnabled = $true
             $script:btnRestoreBackup.IsEnabled = $true
             $txtStatusBar.Text = "Connected to Graph. Click 'Load Synced Users' or 'Load Cloud Users' to begin."
@@ -1814,7 +1842,6 @@ try {
                 $lblConnectedUser.Foreground = "Gray"
                 $btnLoadUsers.IsEnabled = $false
                 $btnLoadCloudUsers.IsEnabled = $false
-                $btnRefresh.IsEnabled = $false
                 $btnDisconnect.IsEnabled = $false
                 $btnBackup.IsEnabled = $false
                 $txtFilterUsers.IsEnabled = $false
@@ -1867,7 +1894,6 @@ try {
         
         # Disable button and show progress
         $btnLoadUsers.IsEnabled = $false
-        $btnRefresh.IsEnabled = $false
         $pnlProgress.Visibility = "Visible"
         
         try {
@@ -1907,7 +1933,6 @@ try {
             $pnlProgress.Visibility = "Collapsed"
             $btnLoadUsers.IsEnabled = $true
             $btnLoadCloudUsers.IsEnabled = $true
-            $btnRefresh.IsEnabled = $true
         }
     })
     
@@ -1928,7 +1953,6 @@ try {
         # Disable buttons and show progress
         $btnLoadCloudUsers.IsEnabled = $false
         $btnLoadUsers.IsEnabled = $false
-        $btnRefresh.IsEnabled = $false
         $pnlProgress.Visibility = "Visible"
         $txtProgressStatus.Text = "Loading cloud-managed users..."
         
@@ -1969,39 +1993,7 @@ try {
             $pnlProgress.Visibility = "Collapsed"
             $btnLoadCloudUsers.IsEnabled = $true
             $btnLoadUsers.IsEnabled = $true
-            $btnRefresh.IsEnabled = $true
         }
-    })
-    
-    # Refresh button click event
-    $btnRefresh.Add_Click({
-        Write-DebugLog "Refresh button clicked" -Level INFO
-        
-        # Clear current data
-        $script:AllUsers = @()
-        $script:UserCollection = $null
-        $dgUsers.ItemsSource = $null
-        $txtFilterUsers.Text = ""
-        $txtFilterUsers.IsEnabled = $false
-        $btnClearFilter.IsEnabled = $false
-        $btnSelectAll.IsEnabled = $false
-        $btnSelectNone.IsEnabled = $false
-        $btnBackup.IsEnabled = $false
-        $script:btnClearAttributes.IsEnabled = $false
-        $script:btnSwitchSOA.IsEnabled = $false
-        $script:btnRollbackSOA.IsEnabled = $false
-        
-        # Reset user type and restore default button visibility
-        $script:CurrentUserType = $null
-        Update-UIForUserType -UserType 'Default'
-        
-        # Reset counts
-        $txtTotalCount.Text = "0"
-        $txtFilteredCount.Text = "0"
-        $txtSelectedCount.Text = "0"
-        
-        $txtStatusBar.Text = "Click 'Load Synced Users' or 'Load Cloud Users' to reload data from Entra ID."
-        Write-DebugLog "Data cleared. Ready to reload" -Level INFO
     })
     
     # Filter TextBox text changed event
