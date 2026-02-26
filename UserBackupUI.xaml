@@ -15,12 +15,13 @@
         </Grid.RowDefinitions>
 
         <!-- Load Users Section -->
-        <GroupBox Header="Synced Users Management" Grid.Row="0" Padding="10" Margin="0,0,0,10">
+        <GroupBox Header="User Management" Grid.Row="0" Padding="10" Margin="0,0,0,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="120"/>
                     <ColumnDefinition Width="120"/>
                     <ColumnDefinition Width="120"/>
+                    <ColumnDefinition Width="150"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 
@@ -30,7 +31,9 @@
                         Height="35" Margin="5,0" IsEnabled="False" FontWeight="Bold"/>
                 <Button Name="btnLoadUsers" Grid.Column="2" Content="Load Synced Users" 
                         Height="35" Margin="5,0" IsEnabled="False" FontWeight="Bold"/>
-                <Button Name="btnRefresh" Grid.Column="3" Content="Refresh" 
+                <Button Name="btnLoadCloudUsers" Grid.Column="3" Content="Load Cloud Users" 
+                        Height="35" Margin="5,0" IsEnabled="False" FontWeight="Bold"/>
+                <Button Name="btnRefresh" Grid.Column="4" Content="Refresh" 
                         Height="35" Margin="5,0,0,0" IsEnabled="False" HorizontalAlignment="Left" Width="100"/>
             </Grid>
         </GroupBox>
