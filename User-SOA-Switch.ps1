@@ -307,8 +307,8 @@ function Load-AllSyncedUsers {
                 $percent = [math]::Round(($current / $total) * 100, 1)
                 $ProgressDetail.Text = "$percent% complete"
                 
-                # Allow UI to update
-                [System.Windows.Forms.Application]::DoEvents()
+                # Allow UI to update using WPF Dispatcher
+                $ProgressBar.Dispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
             }
             
             # Query isCloudManaged from onPremisesSyncBehavior endpoint
@@ -436,7 +436,8 @@ function Load-AllCloudUsers {
                 $ProgressStatus.Text = "Loading cloud users: $current of $total"
                 $percent = [math]::Round(($current / $total) * 100, 1)
                 $ProgressDetail.Text = "$percent% complete"
-                [System.Windows.Forms.Application]::DoEvents()
+                # Allow UI to update using WPF Dispatcher
+                $ProgressBar.Dispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
             }
             
             # Query isCloudManaged from onPremisesSyncBehavior endpoint
