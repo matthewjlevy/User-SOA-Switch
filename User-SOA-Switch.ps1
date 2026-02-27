@@ -2078,9 +2078,7 @@ try {
             [System.Action]{}
         )
         
-        # Small delay to ensure spinner is visible
-        Start-Sleep -Milliseconds 100
-        
+
         try {
             # Load all cloud-managed (non-synced) users
             $users = Load-AllCloudUsers -ProgressBar $pbProgress `
