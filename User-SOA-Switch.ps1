@@ -292,6 +292,7 @@ function Load-AllSyncedUsers {
         }
         
         # Update progress bar setup
+        $ProgressBar.IsIndeterminate = $false
         $ProgressBar.Maximum = $total
         $ProgressBar.Value = 0
         $current = 0
@@ -300,8 +301,9 @@ function Load-AllSyncedUsers {
         foreach ($user in $users) {
             $current++
             
-            # Update progress every 50 users or on last user
-            if (($current % 50 -eq 0) -or ($current -eq $total)) {
+            # Update progress more frequently: every 5 users, or every user if less than 20 total
+            $updateFrequency = if ($total -lt 20) { 1 } else { 5 }
+            if (($current % $updateFrequency -eq 0) -or ($current -eq $total)) {
                 $ProgressBar.Value = $current
                 $ProgressStatus.Text = "Loading synced users: $current of $total"
                 $percent = [math]::Round(($current / $total) * 100, 1)
@@ -423,6 +425,7 @@ function Load-AllCloudUsers {
             return @()
         }
         
+        $ProgressBar.IsIndeterminate = $false
         $ProgressBar.Maximum = $total
         $ProgressBar.Value = 0
         $current = 0
@@ -431,7 +434,9 @@ function Load-AllCloudUsers {
         foreach ($user in $users) {
             $current++
             
-            if (($current % 50 -eq 0) -or ($current -eq $total)) {
+            # Update progress more frequently: every 5 users, or every user if less than 20 total
+            $updateFrequency = if ($total -lt 20) { 1 } else { 5 }
+            if (($current % $updateFrequency -eq 0) -or ($current -eq $total)) {
                 $ProgressBar.Value = $current
                 $ProgressStatus.Text = "Loading cloud users: $current of $total"
                 $percent = [math]::Round(($current / $total) * 100, 1)
@@ -1896,6 +1901,19 @@ try {
         # Disable button and show progress
         $btnLoadUsers.IsEnabled = $false
         $pnlProgress.Visibility = "Visible"
+        $txtProgressStatus.Text = "Connecting to Microsoft Graph..."
+        $txtProgressDetail.Text = "Querying synced users, please wait..."
+        $pbProgress.Value = 0
+        $pbProgress.IsIndeterminate = $true
+        
+        # Force UI update before API call
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
+            [System.Windows.Threading.DispatcherPriority]::Render,
+            [System.Action]{}
+        )
+        
+        # Small delay to ensure spinner is visible
+        Start-Sleep -Milliseconds 100
         
         try {
             # Load all synced users
@@ -1928,6 +1946,39 @@ try {
                 
                 Write-DebugLog "User load completed. $($users.Count) users loaded" -Level SUCCESS
             }
+            else {
+                # No users found - show message in progress panel
+                $pbProgress.IsIndeterminate = $false
+                $txtProgressStatus.Text = "No On-Premises Synced Users Found"
+                $txtProgressDetail.Text = "This tenant does not have any users with OnPremisesSyncEnabled set to true"
+                
+                # Force UI update to show message
+                [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
+                    [System.Windows.Threading.DispatcherPriority]::Render,
+                    [System.Action]{}
+                )
+                
+                # Show message for 3 seconds
+                Start-Sleep -Milliseconds 3000
+                
+                # Clear the grid and reset state
+                $script:AllUsers = @()
+                $script:IsUsersLoaded = $false
+                Update-UserGrid -DataGrid $dgUsers -Users @()
+                
+                # Reset counts
+                $txtTotalCount.Text = "0"
+                $txtFilteredCount.Text = "0"
+                $txtSelectedCount.Text = "0"
+                
+                # Disable user-dependent controls
+                $txtFilterUsers.IsEnabled = $false
+                $btnClearFilter.IsEnabled = $false
+                $btnSelectAll.IsEnabled = $false
+                $btnSelectNone.IsEnabled = $false
+                
+                Write-DebugLog "No users found - grid cleared" -Level INFO
+            }
         }
         finally {
             # Hide progress and re-enable buttons
@@ -1955,7 +2006,19 @@ try {
         $btnLoadCloudUsers.IsEnabled = $false
         $btnLoadUsers.IsEnabled = $false
         $pnlProgress.Visibility = "Visible"
-        $txtProgressStatus.Text = "Loading cloud-managed users..."
+        $txtProgressStatus.Text = "Connecting to Microsoft Graph..."
+        $txtProgressDetail.Text = "Querying cloud-managed users, please wait..."
+        $pbProgress.Value = 0
+        $pbProgress.IsIndeterminate = $true
+        
+        # Force UI update before API call
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
+            [System.Windows.Threading.DispatcherPriority]::Render,
+            [System.Action]{}
+        )
+        
+        # Small delay to ensure spinner is visible
+        Start-Sleep -Milliseconds 100
         
         try {
             # Load all cloud-managed (non-synced) users
@@ -1987,6 +2050,39 @@ try {
                 Update-UIForUserType -UserType 'Cloud'
                 
                 Write-DebugLog "Cloud user load completed. $($users.Count) users loaded" -Level SUCCESS
+            }
+            else {
+                # No users found - show message in progress panel
+                $pbProgress.IsIndeterminate = $false
+                $txtProgressStatus.Text = "No Cloud-Managed Users Found"
+                $txtProgressDetail.Text = "This tenant does not have any users with OnPremisesSyncEnabled set to false or null"
+                
+                # Force UI update to show message
+                [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
+                    [System.Windows.Threading.DispatcherPriority]::Render,
+                    [System.Action]{}
+                )
+                
+                # Show message for 3 seconds
+                Start-Sleep -Milliseconds 3000
+                
+                # Clear the grid and reset state
+                $script:AllUsers = @()
+                $script:IsUsersLoaded = $false
+                Update-UserGrid -DataGrid $dgUsers -Users @()
+                
+                # Reset counts
+                $txtTotalCount.Text = "0"
+                $txtFilteredCount.Text = "0"
+                $txtSelectedCount.Text = "0"
+                
+                # Disable user-dependent controls
+                $txtFilterUsers.IsEnabled = $false
+                $btnClearFilter.IsEnabled = $false
+                $btnSelectAll.IsEnabled = $false
+                $btnSelectNone.IsEnabled = $false
+                
+                Write-DebugLog "No cloud users found - grid cleared" -Level INFO
             }
         }
         finally {
