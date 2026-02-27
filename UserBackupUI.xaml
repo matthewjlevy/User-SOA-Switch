@@ -102,7 +102,7 @@
                     <DataGridTextColumn Header="Display Name" Width="200" Binding="{Binding DisplayName}" IsReadOnly="True"/>
                     <DataGridTextColumn Header="User Principal Name" Width="250" Binding="{Binding UserPrincipalName}" IsReadOnly="True"/>
                     <DataGridTextColumn Header="SAM Account" Width="130" Binding="{Binding OnPremisesSamAccountName}" IsReadOnly="True"/>
-                    <DataGridTextColumn Header="Is Cloud Managed" Width="130" Binding="{Binding IsCloudManaged}" IsReadOnly="True">
+                    <DataGridTextColumn Header="SOA Switched to Cloud" Width="130" Binding="{Binding IsCloudManaged}" IsReadOnly="True">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Setter Property="HorizontalAlignment" Value="Center"/>
