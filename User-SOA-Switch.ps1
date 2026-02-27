@@ -1976,9 +1976,6 @@ try {
             [System.Action]{}
         )
         
-        # Small delay to ensure spinner is visible
-        Start-Sleep -Milliseconds 100
-        
         try {
             # Load all synced users
             $users = Load-AllSyncedUsers -ProgressBar $pbProgress `
