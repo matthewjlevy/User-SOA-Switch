@@ -292,6 +292,7 @@ function Load-AllSyncedUsers {
         }
         
         # Update progress bar setup
+        $ProgressBar.IsIndeterminate = $false
         $ProgressBar.Maximum = $total
         $ProgressBar.Value = 0
         $current = 0
@@ -300,15 +301,31 @@ function Load-AllSyncedUsers {
         foreach ($user in $users) {
             $current++
             
-            # Update progress every 50 users or on last user
-            if (($current % 50 -eq 0) -or ($current -eq $total)) {
+            # Determine dynamic progress update frequency based on total user count
+            $updateFrequency = if ($total -lt 20) {
+                1
+            }
+            elseif ($total -lt 100) {
+                5
+            }
+            elseif ($total -lt 1000) {
+                10
+            }
+            elseif ($total -lt 10000) {
+                50
+            }
+            else {
+                100
+            }
+            
+            if (($current % $updateFrequency -eq 0) -or ($current -eq $total)) {
                 $ProgressBar.Value = $current
                 $ProgressStatus.Text = "Loading synced users: $current of $total"
                 $percent = [math]::Round(($current / $total) * 100, 1)
                 $ProgressDetail.Text = "$percent% complete"
                 
-                # Allow UI to update
-                [System.Windows.Forms.Application]::DoEvents()
+                # Allow UI to update using WPF Dispatcher at render priority
+                $ProgressBar.Dispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Render, [Action]{})
             }
             
             # Query isCloudManaged from onPremisesSyncBehavior endpoint
@@ -423,6 +440,7 @@ function Load-AllCloudUsers {
             return @()
         }
         
+        $ProgressBar.IsIndeterminate = $false
         $ProgressBar.Maximum = $total
         $ProgressBar.Value = 0
         $current = 0
@@ -431,12 +449,30 @@ function Load-AllCloudUsers {
         foreach ($user in $users) {
             $current++
             
-            if (($current % 50 -eq 0) -or ($current -eq $total)) {
+            # Determine dynamic progress update frequency based on total user count
+            $updateFrequency = if ($total -lt 20) {
+                1
+            }
+            elseif ($total -lt 100) {
+                5
+            }
+            elseif ($total -lt 1000) {
+                10
+            }
+            elseif ($total -lt 10000) {
+                50
+            }
+            else {
+                100
+            }
+            
+            if (($current % $updateFrequency -eq 0) -or ($current -eq $total)) {
                 $ProgressBar.Value = $current
                 $ProgressStatus.Text = "Loading cloud users: $current of $total"
                 $percent = [math]::Round(($current / $total) * 100, 1)
                 $ProgressDetail.Text = "$percent% complete"
-                [System.Windows.Forms.Application]::DoEvents()
+                # Allow UI to update using WPF Dispatcher at render priority
+                $ProgressBar.Dispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Render, [Action]{})
             }
             
             # Query isCloudManaged from onPremisesSyncBehavior endpoint
@@ -508,13 +544,20 @@ function Update-UserGrid {
     )
     
     try {
+        # Null safety
+        if ($null -eq $Users) {
+            $Users = @()
+        }
+        
         Write-DebugLog "Updating DataGrid with $($Users.Count) users" -Level INFO
         
         # Create observable collection for data binding
         $collection = New-Object System.Collections.ObjectModel.ObservableCollection[PSObject]
         
         foreach ($user in $Users) {
-            $collection.Add($user)
+            if ($null -ne $user) {
+                $collection.Add($user)
+            }
         }
         
         $DataGrid.ItemsSource = $collection
@@ -524,6 +567,7 @@ function Update-UserGrid {
     }
     catch {
         Write-DebugLog "ERROR updating DataGrid: $($_.Exception.Message)" -Level ERROR
+        Write-DebugLog "Stack Trace: $($_.ScriptStackTrace)" -Level ERROR
     }
 }
 
@@ -536,13 +580,22 @@ function Apply-UserFilter {
     )
     
     try {
+        # Null safety check
+        if ($null -eq $script:AllUsers) {
+            $script:AllUsers = @()
+            Write-DebugLog "AllUsers is null, initialized to empty array" -Level WARNING
+            return
+        }
+        
         $filterStart = Get-Date
         
         # If filter text is less than 3 characters, show all users
         if ([string]::IsNullOrWhiteSpace($FilterText) -or $FilterText.Length -lt 3) {
             Write-DebugLog "Filter text too short or empty. Showing all users" -Level INFO
             Update-UserGrid -DataGrid $DataGrid -Users $script:AllUsers
-            $FilteredCountLabel.Text = $script:AllUsers.Count
+            if ($null -ne $FilteredCountLabel) {
+                $FilteredCountLabel.Text = $script:AllUsers.Count
+            }
             return
         }
         
@@ -558,7 +611,9 @@ function Apply-UserFilter {
         
         # Update DataGrid with filtered results
         Update-UserGrid -DataGrid $DataGrid -Users $filteredUsers
-        $FilteredCountLabel.Text = $filteredUsers.Count
+        if ($null -ne $FilteredCountLabel) {
+            $FilteredCountLabel.Text = $filteredUsers.Count
+        }
     }
     catch {
         Write-DebugLog "ERROR applying filter: $($_.Exception.Message)" -Level ERROR
@@ -568,6 +623,10 @@ function Apply-UserFilter {
 # Function to get all selected users
 function Get-SelectedUsers {
     try {
+        if ($null -eq $script:AllUsers -or $script:AllUsers.Count -eq 0) {
+            Write-DebugLog "Get-SelectedUsers returned 0 users (AllUsers is null or empty)" -Level INFO
+            return @()
+        }
         $selected = $script:AllUsers | Where-Object { $_.IsSelected -eq $true }
         Write-DebugLog "Get-SelectedUsers returned $($selected.Count) users" -Level INFO
         return $selected
@@ -588,25 +647,36 @@ function Update-SelectionCounts {
     )
     
     try {
+        # Null safety check
+        if ($null -eq $script:AllUsers) {
+            $script:AllUsers = @()
+        }
+        
         $totalCount = $script:AllUsers.Count
         $selectedUsers = Get-SelectedUsers
         $selectedCount = $selectedUsers.Count
         
-        $TotalCountLabel.Text = $totalCount
-        $SelectedCountLabel.Text = $selectedCount
+        if ($null -ne $TotalCountLabel) {
+            $TotalCountLabel.Text = $totalCount
+        }
+        if ($null -ne $SelectedCountLabel) {
+            $SelectedCountLabel.Text = $selectedCount
+        }
         
         # Update backup button
-        $BackupButton.Content = "Backup Selected Users ($selectedCount)"
-        $BackupButton.IsEnabled = ($selectedCount -gt 0)
+        if ($null -ne $BackupButton) {
+            $BackupButton.Content = "Backup Selected Users ($selectedCount)"
+            $BackupButton.IsEnabled = ($selectedCount -gt 0)
+        }
         
         # Update SOA action buttons if they have been bound
-        if ($script:btnClearAttributes) {
+        if ($null -ne $script:btnClearAttributes) {
             $script:btnClearAttributes.IsEnabled = ($selectedCount -gt 0)
         }
-        if ($script:btnSwitchSOA) {
+        if ($null -ne $script:btnSwitchSOA) {
             $script:btnSwitchSOA.IsEnabled = ($selectedCount -gt 0)
         }
-        if ($script:btnRollbackSOA) {
+        if ($null -ne $script:btnRollbackSOA) {
             $script:btnRollbackSOA.IsEnabled = ($selectedCount -gt 0)
         }
         
@@ -1895,6 +1965,16 @@ try {
         # Disable button and show progress
         $btnLoadUsers.IsEnabled = $false
         $pnlProgress.Visibility = "Visible"
+        $txtProgressStatus.Text = "Connecting to Microsoft Graph..."
+        $txtProgressDetail.Text = "Querying synced users, please wait..."
+        $pbProgress.Value = 0
+        $pbProgress.IsIndeterminate = $true
+        
+        # Force UI update before API call
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
+            [System.Windows.Threading.DispatcherPriority]::Render,
+            [System.Action]{}
+        )
         
         try {
             # Load all synced users
@@ -1927,6 +2007,39 @@ try {
                 
                 Write-DebugLog "User load completed. $($users.Count) users loaded" -Level SUCCESS
             }
+            else {
+                # No users found - show message in progress panel
+                $pbProgress.IsIndeterminate = $false
+                $txtProgressStatus.Text = "No On-Premises Synced Users Found"
+                $txtProgressDetail.Text = "This tenant does not have any users with OnPremisesSyncEnabled set to true"
+                
+                # Force UI update to show message
+                [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
+                    [System.Windows.Threading.DispatcherPriority]::Render,
+                    [System.Action]{}
+                )
+                
+                # Show message for 3 seconds
+                Start-Sleep -Milliseconds 3000
+                
+                # Clear the grid and reset state
+                $script:AllUsers = @()
+                $script:IsUsersLoaded = $false
+                Update-UserGrid -DataGrid $dgUsers -Users @()
+                
+                # Reset counts
+                $txtTotalCount.Text = "0"
+                $txtFilteredCount.Text = "0"
+                $txtSelectedCount.Text = "0"
+                
+                # Disable user-dependent controls
+                $txtFilterUsers.IsEnabled = $false
+                $btnClearFilter.IsEnabled = $false
+                $btnSelectAll.IsEnabled = $false
+                $btnSelectNone.IsEnabled = $false
+                
+                Write-DebugLog "No users found - grid cleared" -Level INFO
+            }
         }
         finally {
             # Hide progress and re-enable buttons
@@ -1954,8 +2067,18 @@ try {
         $btnLoadCloudUsers.IsEnabled = $false
         $btnLoadUsers.IsEnabled = $false
         $pnlProgress.Visibility = "Visible"
-        $txtProgressStatus.Text = "Loading cloud-managed users..."
+        $txtProgressStatus.Text = "Connecting to Microsoft Graph..."
+        $txtProgressDetail.Text = "Querying cloud-managed users, please wait..."
+        $pbProgress.Value = 0
+        $pbProgress.IsIndeterminate = $true
         
+        # Force UI update before API call
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
+            [System.Windows.Threading.DispatcherPriority]::Render,
+            [System.Action]{}
+        )
+        
+
         try {
             # Load all cloud-managed (non-synced) users
             $users = Load-AllCloudUsers -ProgressBar $pbProgress `
@@ -1986,6 +2109,39 @@ try {
                 Update-UIForUserType -UserType 'Cloud'
                 
                 Write-DebugLog "Cloud user load completed. $($users.Count) users loaded" -Level SUCCESS
+            }
+            else {
+                # No users found - show message in progress panel
+                $pbProgress.IsIndeterminate = $false
+                $txtProgressStatus.Text = "No Cloud-Managed Users Found"
+                $txtProgressDetail.Text = "This tenant does not have any users with OnPremisesSyncEnabled set to false or null"
+                
+                # Force UI update to show message
+                [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
+                    [System.Windows.Threading.DispatcherPriority]::Render,
+                    [System.Action]{}
+                )
+                
+                # Show message for 3 seconds
+                Start-Sleep -Milliseconds 3000
+                
+                # Clear the grid and reset state
+                $script:AllUsers = @()
+                $script:IsUsersLoaded = $false
+                Update-UserGrid -DataGrid $dgUsers -Users @()
+                
+                # Reset counts
+                $txtTotalCount.Text = "0"
+                $txtFilteredCount.Text = "0"
+                $txtSelectedCount.Text = "0"
+                
+                # Disable user-dependent controls
+                $txtFilterUsers.IsEnabled = $false
+                $btnClearFilter.IsEnabled = $false
+                $btnSelectAll.IsEnabled = $false
+                $btnSelectNone.IsEnabled = $false
+                
+                Write-DebugLog "No cloud users found - grid cleared" -Level INFO
             }
         }
         finally {
@@ -2076,27 +2232,48 @@ $dgUsers.AddHandler(
     [System.Windows.Data.Binding]::TargetUpdatedEvent,
     [System.Windows.RoutedEventHandler]{
         param($sender, $e)
-        # Update counts immediately when checkbox value changes
-        Update-SelectionCounts -TotalCountLabel $txtTotalCount `
-                               -FilteredCountLabel $txtFilteredCount `
-                               -SelectedCountLabel $txtSelectedCount `
-                               -BackupButton $btnBackup
+        try {
+            # Only update counts if users are loaded
+            if ($script:IsUsersLoaded -and $null -ne $script:AllUsers) {
+                # Update counts immediately when checkbox value changes
+                Update-SelectionCounts -TotalCountLabel $txtTotalCount `
+                                       -FilteredCountLabel $txtFilteredCount `
+                                       -SelectedCountLabel $txtSelectedCount `
+                                       -BackupButton $btnBackup
+            }
+        }
+        catch {
+            Write-DebugLog "ERROR in TargetUpdated event: $($_.Exception.Message)" -Level WARNING
+        }
     }
 )
 
 # Also handle PreviewMouseUp on DataGrid to catch checkbox clicks
 $dgUsers.Add_PreviewMouseUp({
     param($sender, $e)
-    # Small delay to let the click complete and binding update
-    $dgUsers.Dispatcher.Invoke(
-        [System.Windows.Threading.DispatcherPriority]::Background,
-        [System.Action]{
-            Update-SelectionCounts -TotalCountLabel $txtTotalCount `
-                                   -FilteredCountLabel $txtFilteredCount `
-                                   -SelectedCountLabel $txtSelectedCount `
-                                   -BackupButton $btnBackup
+    try {
+        # Only process if users are loaded
+        if ($script:IsUsersLoaded -and $null -ne $script:AllUsers) {
+            # Small delay to let the click complete and binding update
+            $dgUsers.Dispatcher.Invoke(
+                [System.Windows.Threading.DispatcherPriority]::Background,
+                [System.Action]{
+                    try {
+                        Update-SelectionCounts -TotalCountLabel $txtTotalCount `
+                                               -FilteredCountLabel $txtFilteredCount `
+                                               -SelectedCountLabel $txtSelectedCount `
+                                               -BackupButton $btnBackup
+                    }
+                    catch {
+                        Write-DebugLog "ERROR in selection update: $($_.Exception.Message)" -Level WARNING
+                    }
+                }
+            )
         }
-    )
+    }
+    catch {
+        Write-DebugLog "ERROR in PreviewMouseUp event: $($_.Exception.Message)" -Level WARNING
+    }
 })    
     # Backup button click event
     $btnBackup.Add_Click({
