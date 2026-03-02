@@ -139,29 +139,31 @@
             </Border>
         </Grid>
 
-        <!-- SOA Operation Buttons - Sequence 1 -->
-        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Left"
-                    Margin="0,10,0,5">
-            <Button Name="btnBackup" Content="Backup Selected Users (0)" Width="200" Height="38"
-                    Margin="0,0,8,0" IsEnabled="False" FontWeight="Bold" FontSize="13"/>
-            <Button Name="btnSwitchSOA" Content="Switch SOA to Cloud"
-                    Width="180" Height="38" Margin="0,0,8,0" IsEnabled="False"
-                    FontWeight="Bold" Background="#6F42C1" Foreground="White" BorderBrush="#5A32A3"/>
-            <Button Name="btnRollbackSOA" Content="Rollback SOA to On-Prem"
-                    Width="195" Height="38" Margin="0,0,0,0" IsEnabled="False"
-                    FontWeight="Bold" Background="#FF8C00" Foreground="White" BorderBrush="#E67E00"/>
-        </StackPanel>
+        <!-- Sequential Operations -->
+        <GroupBox Header="Sequential Operations" Grid.Row="4" Padding="10" Margin="0,5,0,5">
+            <StackPanel Orientation="Horizontal">
+                <Button Name="btnBackup" Content="1. Backup Selected Users (0)" Width="210" Height="38"
+                        Margin="0,0,8,0" IsEnabled="False" FontWeight="Bold" FontSize="13"/>
+                <Button Name="btnSwitchSOA" Content="2. Switch SOA to Cloud"
+                        Width="190" Height="38" Margin="0,0,0,0" IsEnabled="False"
+                        FontWeight="Bold" Background="#6F42C1" Foreground="White" BorderBrush="#5A32A3"/>
+            </StackPanel>
+        </GroupBox>
 
-        <!-- Independent Operation Buttons -->
-        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Left"
-                    Margin="0,5,0,10">
-            <Button Name="btnRestoreBackup" Content="Restore from Backup"
-                    Width="180" Height="38" Margin="0,0,8,0" IsEnabled="False"
-                    FontWeight="Bold" Background="#28A745" Foreground="White" BorderBrush="#1E7E34"/>
-            <Button Name="btnClearAttributes" Content="Clear On-Prem Attributes"
-                    Width="200" Height="38" Margin="0,0,0,0" IsEnabled="False"
-                    FontWeight="Bold" Background="#DC3545" Foreground="White" BorderBrush="#C82333"/>
-        </StackPanel>
+        <!-- Independent Operations -->
+        <GroupBox Header="Independent Operations" Grid.Row="5" Padding="10" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal">
+                <Button Name="btnRollbackSOA" Content="Rollback SOA to On-Prem"
+                        Width="195" Height="38" Margin="0,0,8,0" IsEnabled="False"
+                        FontWeight="Bold" Background="#FF8C00" Foreground="White" BorderBrush="#E67E00"/>
+                <Button Name="btnRestoreBackup" Content="Restore from Backup"
+                        Width="180" Height="38" Margin="0,0,8,0" IsEnabled="False"
+                        FontWeight="Bold" Background="#28A745" Foreground="White" BorderBrush="#1E7E34"/>
+                <Button Name="btnClearAttributes" Content="Clear On-Prem Attributes"
+                        Width="200" Height="38" Margin="0,0,0,0" IsEnabled="False"
+                        FontWeight="Bold" Background="#DC3545" Foreground="White" BorderBrush="#C82333"/>
+            </StackPanel>
+        </GroupBox>
 
         <!-- Close Button -->
         <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right"

@@ -665,7 +665,7 @@ function Update-SelectionCounts {
         
         # Update backup button
         if ($null -ne $BackupButton) {
-            $BackupButton.Content = "Backup Selected Users ($selectedCount)"
+            $BackupButton.Content = "1. Backup Selected Users ($selectedCount)"
             $BackupButton.IsEnabled = ($selectedCount -gt 0)
         }
         
@@ -1927,7 +1927,7 @@ try {
                 $txtTotalCount.Text = "0"
                 $txtFilteredCount.Text = "0"
                 $txtSelectedCount.Text = "0"
-                $btnBackup.Content = "Backup Selected Users (0)"
+                $btnBackup.Content = "1. Backup Selected Users (0)"
                 $txtFilterUsers.Text = ""
                 $script:CurrentUserType = $null
                 Update-UIForUserType -UserType 'Default'
