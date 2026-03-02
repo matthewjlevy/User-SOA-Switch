@@ -325,9 +325,9 @@ function Load-AllSyncedUsers {
                 $ProgressDetail.Text = "$percent% complete"
                 
                 # Allow UI to update using WPF Dispatcher at render priority
-                $ProgressBar.Dispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Render, [Action]{})
+                $null = $ProgressBar.Dispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Render, [Action]{})
             }
-            
+
             # Query isCloudManaged from onPremisesSyncBehavior endpoint
             $isCloudManaged = "Unknown"
             try {
@@ -341,7 +341,7 @@ function Load-AllSyncedUsers {
                 # If endpoint doesn't exist or errors, leave as Unknown
                 $isCloudManaged = "Unknown"
             }
-            
+
             # Create enriched user object with IsSelected property
             $userObject = [PSCustomObject]@{
                 IsSelected = $false
@@ -472,9 +472,9 @@ function Load-AllCloudUsers {
                 $percent = [math]::Round(($current / $total) * 100, 1)
                 $ProgressDetail.Text = "$percent% complete"
                 # Allow UI to update using WPF Dispatcher at render priority
-                $ProgressBar.Dispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Render, [Action]{})
+                $null = $ProgressBar.Dispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Render, [Action]{})
             }
-            
+
             # Query isCloudManaged from onPremisesSyncBehavior endpoint
             $isCloudManaged = "Unknown"
             try {
@@ -665,7 +665,7 @@ function Update-SelectionCounts {
         
         # Update backup button
         if ($null -ne $BackupButton) {
-            $BackupButton.Content = "Backup Selected Users ($selectedCount)"
+            $BackupButton.Content = "1. Backup Selected Users ($selectedCount)"
             $BackupButton.IsEnabled = ($selectedCount -gt 0)
         }
         
@@ -1927,7 +1927,7 @@ try {
                 $txtTotalCount.Text = "0"
                 $txtFilteredCount.Text = "0"
                 $txtSelectedCount.Text = "0"
-                $btnBackup.Content = "Backup Selected Users (0)"
+                $btnBackup.Content = "1. Backup Selected Users (0)"
                 $txtFilterUsers.Text = ""
                 $script:CurrentUserType = $null
                 Update-UIForUserType -UserType 'Default'
@@ -1984,7 +1984,11 @@ try {
                                          -ProgressStatus $txtProgressStatus `
                                          -ProgressDetail $txtProgressDetail `
                                          -StatusBar $txtStatusBar
-            
+
+            # Filter to only enriched PSCustomObjects (excludes any raw MgUser objects
+            # that may leak from the function's output pipeline)
+            $users = @($users | Where-Object { $null -ne $_.PSObject.Properties['IsSelected'] })
+
             if ($users.Count -gt 0) {
                 $script:AllUsers = $users
                 $script:IsUsersLoaded = $true
@@ -2087,7 +2091,11 @@ try {
                                         -ProgressStatus $txtProgressStatus `
                                         -ProgressDetail $txtProgressDetail `
                                         -StatusBar $txtStatusBar
-            
+
+            # Filter to only enriched PSCustomObjects (excludes any raw MgUser objects
+            # that may leak from the function's output pipeline)
+            $users = @($users | Where-Object { $null -ne $_.PSObject.Properties['IsSelected'] })
+
             if ($users.Count -gt 0) {
                 $script:AllUsers = $users
                 $script:IsUsersLoaded = $true
