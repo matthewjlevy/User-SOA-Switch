@@ -1448,9 +1448,11 @@ function Switch-UserSOA {
             "2. Verify SOA switch succeeded`n" +
             "3. Clear on-premises sync attributes`n`n" +
             "PREREQUISITES:`n" +
-            "✓ Users should be excluded from on-premises AD sync scope`n" +
             "✓ A backup of user attributes should exist before proceeding`n" +
             "✓ Ensure groups are cloud-managed BEFORE switching users`n`n" +
+            "BEHAVIOR NOTE:`n" +
+            "• Users can remain in on-prem sync scope after SOA switch`n" +
+            "• AD DS changes to those users will not flow to Entra ID`n`n" +
             "This operation will use the Microsoft Graph v1.0 endpoint.`n`n" +
             "Are you sure you want to proceed?",
             "Switch Source of Authority",

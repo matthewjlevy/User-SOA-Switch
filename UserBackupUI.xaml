@@ -146,7 +146,7 @@
                 <TextBlock Text="⚠  SOURCE OF AUTHORITY (SOA) MANAGEMENT — ADVANCED OPERATIONS"
                            FontWeight="Bold" Foreground="#856404" FontSize="12"/>
                 <TextBlock TextWrapping="Wrap" FontSize="11" Margin="0,3,0,0" Foreground="#856404"
-                           Text="PREREQUISITE SEQUENCE: (1) Backup user attributes  → (2) Switch SOA to Cloud. → (3) Clear On-Prem Attributes.   Ensure each user is excluded from on-premises AD sync before switching SOA. These operations are irreversible without a valid backup."/>
+                           Text="RECOMMENDED FLOW: (1) Backup user attributes → (2) Switch SOA to Cloud (includes attribute clear for successfully switched users). Users can remain in on-prem sync scope, but AD DS changes will not flow to Entra ID after SOA switch. Use Rollback SOA or Restore from Backup if needed."/>
             </StackPanel>
         </Border>
 
