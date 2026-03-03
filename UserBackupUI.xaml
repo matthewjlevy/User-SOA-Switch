@@ -51,14 +51,29 @@
                 <Label Name="lblConnectedUser" Content="N/A" Foreground="Gray"/>
             </StackPanel>
             
-            <!-- Filter Section -->
-            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
-                <Label Content="Filter by Display Name:" VerticalAlignment="Center" FontWeight="Bold"/>
-                <TextBox Name="txtFilterUsers" Width="250" Height="25" Margin="5,0"
-                         ToolTip="Enter 3 or more characters to filter users" IsEnabled="False"/>
-                <Button Name="btnClearFilter" Content="Clear Filter" Width="100" Height="25" 
-                        Margin="5,0,0,0" IsEnabled="False"/>
-            </StackPanel>
+            <!-- Update Notification and Filter Section -->
+            <Grid Grid.Column="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Update Notification -->
+                <TextBlock Name="txtUpdateNotification" Grid.Column="0"
+                           VerticalAlignment="Center" HorizontalAlignment="Left"
+                           Foreground="#E67E00" FontWeight="Bold" Margin="10,0,0,0"
+                           Visibility="Collapsed" Cursor="Hand"
+                           ToolTip="A newer version is available on GitHub"/>
+
+                <!-- Filter Section -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Label Content="Filter by Display Name:" VerticalAlignment="Center" FontWeight="Bold"/>
+                    <TextBox Name="txtFilterUsers" Width="250" Height="25" Margin="5,0"
+                             ToolTip="Enter 3 or more characters to filter users" IsEnabled="False"/>
+                    <Button Name="btnClearFilter" Content="Clear Filter" Width="100" Height="25" 
+                            Margin="5,0,0,0" IsEnabled="False"/>
+                </StackPanel>
+            </Grid>
         </Grid>
 
         <!-- User Counts and Selection Controls -->
