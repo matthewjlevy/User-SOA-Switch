@@ -21,7 +21,7 @@ Add-Type -AssemblyName WindowsBase
 # *** When releasing a new version, update the value below and push a matching
 # *** git tag (e.g. v1.1.0).  The GitHub Actions release workflow will then
 # *** create a GitHub Release automatically, which the in-app update check uses.
-$script:CurrentVersion = "1.0.0"
+$script:CurrentVersion = "1.0.1"
 $script:GitHubRepo = "matthewjlevy/User-SOA-Switch"
 
 # Global variables for multi-user selection
