@@ -108,6 +108,27 @@ Backups include user identity data and on-prem sync attributes used by this tool
 - A basic forms/WPF check script is included at:
   - `Troubleshooting/Test-WindowsForms.ps1`
 
+## Versioning and releasing a new version
+
+The in-app update check compares the running version against the latest GitHub Release.
+
+**To release a new version:**
+
+1. Update `$script:CurrentVersion` near the top of `User-SOA-Switch.ps1`  
+   (search for the comment `*** When releasing a new version`).
+2. Commit the change.
+3. Push a matching git tag:
+   ```powershell
+   git tag v1.1.0
+   git push origin v1.1.0
+   ```
+4. The GitHub Actions workflow (`.github/workflows/release.yml`) will automatically
+   create a GitHub Release for that tag.  The in-app update check will then surface
+   the new version to users still running an older release.
+
+> **Copilot / contributors:** whenever you bump `$script:CurrentVersion` in a PR,
+> remind the maintainer to push a matching `vX.Y.Z` tag after merging.
+
 ## Safety guidance
 
 - Always back up before SOA changes.
