@@ -17,6 +17,13 @@ Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 
+# Application version
+# *** When releasing a new version, update the value below and push a matching
+# *** git tag (e.g. v1.1.0).  The GitHub Actions release workflow will then
+# *** create a GitHub Release automatically, which the in-app update check uses.
+$script:CurrentVersion = "1.0.0"
+$script:GitHubRepo = "matthewjlevy/User-SOA-Switch"
+
 # Global variables for multi-user selection
 $script:IsConnected = $false
 $script:AllUsers = @()  # Master list of all loaded users
@@ -51,6 +58,24 @@ function Write-DebugLog {
             default { 'Cyan' }
         }
         Write-Host $logMessage -ForegroundColor $color
+    }
+}
+
+# Function to check for a newer version on GitHub
+function Get-LatestGitHubVersion {
+    param()
+    
+    try {
+        Write-DebugLog "Checking for updates from GitHub..." -Level INFO
+        $apiUrl = "https://api.github.com/repos/$script:GitHubRepo/releases/latest"
+        $response = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+        $latestTag = $response.tag_name -replace '^v', ''
+        Write-DebugLog "Latest GitHub version: $latestTag (current: $script:CurrentVersion)" -Level INFO
+        return $latestTag
+    }
+    catch {
+        Write-DebugLog "Failed to check for updates from GitHub: $($_.Exception.Message)" -Level WARNING
+        return $null
     }
 }
 
@@ -1863,8 +1888,70 @@ try {
     $script:btnSwitchSOA = $window.FindName("btnSwitchSOA")
     $script:btnRollbackSOA = $window.FindName("btnRollbackSOA")
     $script:btnRestoreBackup = $window.FindName("btnRestoreBackup")
+    $txtUpdateNotification = $window.FindName("txtUpdateNotification")
     
     Write-DebugLog "All UI elements bound successfully" -Level SUCCESS
+    
+    # Check for updates in the background when window finishes rendering
+    $window.Add_ContentRendered({
+        Write-DebugLog "Window rendered. Starting background update check..." -Level INFO
+        
+        # Use a synchronized hashtable to pass the result from the background runspace
+        $syncHash = [hashtable]::Synchronized(@{ LatestVersion = $null; Done = $false })
+        $currentVer = $script:CurrentVersion
+        $ghRepo     = $script:GitHubRepo
+        
+        # Run the GitHub API call in a background runspace so the UI stays responsive
+        $rs = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace()
+        $rs.Open()
+        $ps = [PowerShell]::Create()
+        $ps.Runspace = $rs
+        $null = $ps.AddScript({
+            param($syncHash, $repo)
+            try {
+                $resp = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" `
+                                          -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+                $syncHash.LatestVersion = $resp.tag_name -replace '^v', ''
+            }
+            catch { }
+            finally { $syncHash.Done = $true }
+        }).AddArgument($syncHash).AddArgument($ghRepo)
+        $null = $ps.BeginInvoke()
+        
+        # Poll on the UI thread with a DispatcherTimer so WPF updates are thread-safe
+        $pollTimer = [System.Windows.Threading.DispatcherTimer]::new()
+        $pollTimer.Interval = [System.TimeSpan]::FromSeconds(1)
+        $pollTimer.Add_Tick({
+            if ($syncHash.Done) {
+                $pollTimer.Stop()
+                $rs.Close()
+                $ps.Dispose()
+                if ($null -ne $syncHash.LatestVersion) {
+                    try {
+                        $current = [System.Version]$currentVer
+                        $latest  = [System.Version]$syncHash.LatestVersion
+                        if ($latest -gt $current) {
+                            $txtUpdateNotification.Text = "🔔 Update available: v$($syncHash.LatestVersion)  (current: v$currentVer) — click to open GitHub"
+                            $txtUpdateNotification.Visibility = "Visible"
+                            Write-DebugLog "Update notification displayed: v$($syncHash.LatestVersion) available" -Level INFO
+                        }
+                        else {
+                            Write-DebugLog "Application is up to date (v$currentVer)" -Level INFO
+                        }
+                    }
+                    catch {
+                        Write-DebugLog "Version comparison failed: $($_.Exception.Message)" -Level WARNING
+                    }
+                }
+            }
+        })
+        $pollTimer.Start()
+    })
+    
+    # Open GitHub releases page when update notification is clicked
+    $txtUpdateNotification.Add_MouseLeftButtonUp({
+        Start-Process "https://github.com/$script:GitHubRepo/releases/latest"
+    })
     
     # Connect button click event
     Write-DebugLog "Attaching event handlers..." -Level INFO
