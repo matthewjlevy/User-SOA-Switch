@@ -1,6 +1,6 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Entra ID User Sync Attribute Backup - Multi-User Selection" Height="820" Width="1200"
+        Title="Entra ID User SOA switch - by Matthew Levy" Height="820" Width="1200"
         WindowStartupLocation="CenterScreen">
     <Grid Margin="10">
         <Grid.RowDefinitions>
@@ -58,22 +58,20 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Update Notification -->
-                <TextBlock Name="txtUpdateNotification" Grid.Column="0"
-                           VerticalAlignment="Center" HorizontalAlignment="Left"
-                           Foreground="#E67E00" FontWeight="Bold" Margin="10,0,0,0"
-                           Visibility="Collapsed" Cursor="Hand"
-                           ToolTip="A newer version is available on GitHub"/>
-
                 <!-- Filter Section -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Right">
                     <Label Content="Filter by Display Name:" VerticalAlignment="Center" FontWeight="Bold"/>
                     <TextBox Name="txtFilterUsers" Width="250" Height="25" Margin="5,0"
                              ToolTip="Enter 3 or more characters to filter users" IsEnabled="False"/>
                     <Button Name="btnClearFilter" Content="Clear Filter" Width="100" Height="25" 
                             Margin="5,0,0,0" IsEnabled="False"/>
-                </StackPanel>
-            </Grid>
+                </StackPanel>                
+                <!-- Update Notification -->
+                <TextBlock Name="txtUpdateNotification" Grid.Column="1"
+                           VerticalAlignment="Center" HorizontalAlignment="Right"
+                           Foreground="#E67E00" FontWeight="Bold" Margin="10,0,0,0"
+                           Visibility="Collapsed" Cursor="Hand"
+                           ToolTip="A newer version is available on GitHub"/>            </Grid>
         </Grid>
 
         <!-- User Counts and Selection Controls -->
@@ -190,8 +188,13 @@
         <!-- Status Bar -->
         <Border Grid.Row="7" Background="#F0F0F0" BorderBrush="#CCCCCC" 
                 BorderThickness="0,1,0,0" Padding="5">
-            <TextBlock Name="txtStatusBar" Text="Ready. Click 'Connect to Graph' to begin." 
-                       FontStyle="Italic"/>
+            <Grid>
+                <TextBlock Name="txtStatusBar" Text="Ready. Click 'Connect to Graph' to begin." 
+                           FontStyle="Italic" HorizontalAlignment="Left"/>
+                <TextBlock Name="txtCurrentVersion" Text="v1.0.0" 
+                           FontStyle="Italic" HorizontalAlignment="Right" 
+                           Foreground="Gray" FontSize="11"/>
+            </Grid>
         </Border>
     </Grid>
 </Window>

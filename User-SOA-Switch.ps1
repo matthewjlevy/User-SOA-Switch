@@ -21,7 +21,7 @@ Add-Type -AssemblyName WindowsBase
 # *** When releasing a new version, update the value below and push a matching
 # *** git tag (e.g. v1.1.0).  The GitHub Actions release workflow will then
 # *** create a GitHub Release automatically, which the in-app update check uses.
-$script:CurrentVersion = "1.0.0"
+$script:CurrentVersion = "1.0.1"
 $script:GitHubRepo = "matthewjlevy/User-SOA-Switch"
 
 # Global variables for multi-user selection
@@ -31,6 +31,13 @@ $script:UserCollection = $null  # ObservableCollection for DataGrid binding
 $script:IsUsersLoaded = $false
 $script:CurrentUserType = $null  # 'OnPrem' or 'Cloud' based on loaded user set
 $script:ADSyncToolsAvailable = $false  # Tracks whether ADSyncTools module is loaded
+
+# Version check variables
+$script:UpdateCheckSyncHash = $null
+$script:UpdateCheckRunspace = $null
+$script:UpdateCheckPowerShell = $null
+$script:UpdateCheckTimer = $null
+$script:txtUpdateNotification = $null
 
 # Debug logging setup
 $script:LogFile = Join-Path $PSScriptRoot "debug_log_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
@@ -1884,11 +1891,15 @@ try {
     $btnBackup = $window.FindName("btnBackup")
     $btnClose = $window.FindName("btnClose")
     $txtStatusBar = $window.FindName("txtStatusBar")
+    $txtCurrentVersion = $window.FindName("txtCurrentVersion")
     $script:btnClearAttributes = $window.FindName("btnClearAttributes")
     $script:btnSwitchSOA = $window.FindName("btnSwitchSOA")
     $script:btnRollbackSOA = $window.FindName("btnRollbackSOA")
     $script:btnRestoreBackup = $window.FindName("btnRestoreBackup")
-    $txtUpdateNotification = $window.FindName("txtUpdateNotification")
+    $script:txtUpdateNotification = $window.FindName("txtUpdateNotification")
+    
+    # Set current version in status bar
+    $txtCurrentVersion.Text = "v$($script:CurrentVersion)"
     
     Write-DebugLog "All UI elements bound successfully" -Level SUCCESS
     
@@ -1897,16 +1908,15 @@ try {
         Write-DebugLog "Window rendered. Starting background update check..." -Level INFO
         
         # Use a synchronized hashtable to pass the result from the background runspace
-        $syncHash = [hashtable]::Synchronized(@{ LatestVersion = $null; Done = $false })
-        $currentVer = $script:CurrentVersion
-        $ghRepo     = $script:GitHubRepo
+        $script:UpdateCheckSyncHash = [hashtable]::Synchronized(@{ LatestVersion = $null; Done = $false })
+        $ghRepo = $script:GitHubRepo
         
         # Run the GitHub API call in a background runspace so the UI stays responsive
-        $rs = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace()
-        $rs.Open()
-        $ps = [PowerShell]::Create()
-        $ps.Runspace = $rs
-        $null = $ps.AddScript({
+        $script:UpdateCheckRunspace = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace()
+        $script:UpdateCheckRunspace.Open()
+        $script:UpdateCheckPowerShell = [PowerShell]::Create()
+        $script:UpdateCheckPowerShell.Runspace = $script:UpdateCheckRunspace
+        $null = $script:UpdateCheckPowerShell.AddScript({
             param($syncHash, $repo)
             try {
                 $resp = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" `
@@ -1915,28 +1925,28 @@ try {
             }
             catch { }
             finally { $syncHash.Done = $true }
-        }).AddArgument($syncHash).AddArgument($ghRepo)
-        $null = $ps.BeginInvoke()
+        }).AddArgument($script:UpdateCheckSyncHash).AddArgument($ghRepo)
+        $null = $script:UpdateCheckPowerShell.BeginInvoke()
         
         # Poll on the UI thread with a DispatcherTimer so WPF updates are thread-safe
-        $pollTimer = [System.Windows.Threading.DispatcherTimer]::new()
-        $pollTimer.Interval = [System.TimeSpan]::FromSeconds(1)
-        $pollTimer.Add_Tick({
-            if ($syncHash.Done) {
-                $pollTimer.Stop()
-                $rs.Close()
-                $ps.Dispose()
-                if ($null -ne $syncHash.LatestVersion) {
+        $script:UpdateCheckTimer = [System.Windows.Threading.DispatcherTimer]::new()
+        $script:UpdateCheckTimer.Interval = [System.TimeSpan]::FromSeconds(1)
+        $script:UpdateCheckTimer.Add_Tick({
+            if ($script:UpdateCheckSyncHash.Done) {
+                $script:UpdateCheckTimer.Stop()
+                $script:UpdateCheckRunspace.Close()
+                $script:UpdateCheckPowerShell.Dispose()
+                if ($null -ne $script:UpdateCheckSyncHash.LatestVersion) {
                     try {
-                        $current = [System.Version]$currentVer
-                        $latest  = [System.Version]$syncHash.LatestVersion
+                        $current = [System.Version]$script:CurrentVersion
+                        $latest  = [System.Version]$script:UpdateCheckSyncHash.LatestVersion
                         if ($latest -gt $current) {
-                            $txtUpdateNotification.Text = "🔔 Update available: v$($syncHash.LatestVersion)  (current: v$currentVer) — click to open GitHub"
-                            $txtUpdateNotification.Visibility = "Visible"
-                            Write-DebugLog "Update notification displayed: v$($syncHash.LatestVersion) available" -Level INFO
+                            $script:txtUpdateNotification.Text = "🔔 Update available: v$($script:UpdateCheckSyncHash.LatestVersion)  (current: v$($script:CurrentVersion)) — click to open GitHub"
+                            $script:txtUpdateNotification.Visibility = "Visible"
+                            Write-DebugLog "Update notification displayed: v$($script:UpdateCheckSyncHash.LatestVersion) available" -Level INFO
                         }
                         else {
-                            Write-DebugLog "Application is up to date (v$currentVer)" -Level INFO
+                            Write-DebugLog "Application is up to date (v$($script:CurrentVersion))" -Level INFO
                         }
                     }
                     catch {
@@ -1945,11 +1955,11 @@ try {
                 }
             }
         })
-        $pollTimer.Start()
+        $script:UpdateCheckTimer.Start()
     })
     
     # Open GitHub releases page when update notification is clicked
-    $txtUpdateNotification.Add_MouseLeftButtonUp({
+    $script:txtUpdateNotification.Add_MouseLeftButtonUp({
         Start-Process "https://github.com/$script:GitHubRepo/releases/latest"
     })
     
