@@ -4,6 +4,31 @@ PowerShell 7 + WPF tool for **switching user Source of Authority (SOA)** from on
 
 This project is designed for controlled user lifecycle operations where synced users are being moved to cloud-managed identity.
 
+## Disclaimer
+
+**This is NOT an official Microsoft product or tool.**
+
+This PowerShell script and GUI application are provided as-is for managing Entra ID (Azure AD) user attributes and Source of Authority (SOA) transitions. 
+
+### Important Warnings
+
+- **Use at your own risk** - The authors are not responsible if things go wrong or data is lost
+- **Test thoroughly** - Always test in a non-production environment before using in production
+- **Backup first** - Always create backups of user attributes before making any changes
+- **Understand the impact** - Switching Source of Authority and clearing on-premises attributes are critical operations that can affect user access and synchronization
+- **Verify prerequisites** - Ensure you understand the requirements and implications of SOA transitions, including group management dependencies
+
+### Your Responsibility
+
+If you deploy this solution to production:
+- ✓ Ensure it meets your **technical** requirements and environment
+- ✓ Verify it complies with your organization's **commercial** policies
+- ✓ Confirm it aligns with **legal** and compliance obligations
+- ✓ Perform comprehensive **load testing** and validation
+- ✓ Have a rollback plan and tested backup procedures
+
+**By using this tool, you acknowledge that you understand and accept these risks.**
+
 ## What this tool is for
 
 Primary use case:
