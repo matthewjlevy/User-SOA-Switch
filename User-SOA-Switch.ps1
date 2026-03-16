@@ -95,7 +95,7 @@ function Initialize-GraphModule {
         Write-Host "Checking for Microsoft.Graph module..." -ForegroundColor Cyan
 
         # Define minimum required version to ensure compatibility
-        $minimumVersion = [version]"2.35.0"
+        $minimumVersion = [version]"2.25.0"
         $requiredModules = @('Microsoft.Graph.Authentication', 'Microsoft.Graph.Users')
         Write-DebugLog "Required modules: $($requiredModules -join ', ') (minimum version: v$minimumVersion)" -Level INFO
 
@@ -118,8 +118,8 @@ function Initialize-GraphModule {
 
             if (-not $availableModule) {
                 Write-DebugLog "$moduleName with minimum version v$minimumVersion not found. Installing latest..." -Level WARNING
-                Write-Host "Installing $moduleName (minimum version v$minimumVersion required)..." -ForegroundColor Yellow
-                Install-Module -Name $moduleName -MinimumVersion $minimumVersion -Scope CurrentUser -Force -AllowClobber
+                Write-Host "Installing latest $moduleName (minimum version v$minimumVersion required)..." -ForegroundColor Yellow
+                Install-Module -Name $moduleName -Scope CurrentUser -Force -AllowClobber
                 Write-DebugLog "$moduleName installed successfully" -Level SUCCESS
 
                 # Re-check available modules after installation
