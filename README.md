@@ -69,8 +69,8 @@ Also included:
 
 ### Modules
 The script installs/loads what it needs:
-- `Microsoft.Graph.Authentication` (v2.35.0)
-- `Microsoft.Graph.Users` (v2.35.0)
+- `Microsoft.Graph.Authentication` (v2.35.0 or later)
+- `Microsoft.Graph.Users` (v2.35.0 or later)
 - `ADSyncTools` (required for clear/restore operations)
 
 ### Graph scopes / permissions

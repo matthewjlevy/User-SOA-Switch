@@ -94,41 +94,42 @@ function Initialize-GraphModule {
         Write-DebugLog "Starting Microsoft.Graph module initialization" -Level INFO
         Write-Host "Checking for Microsoft.Graph module..." -ForegroundColor Cyan
         
-        # Define required module version to ensure compatibility
-        $targetVersion = "2.35.0"
+        # Define minimum required module version to ensure compatibility
+        $minimumVersion = [version]"2.35.0"
         $requiredModules = @('Microsoft.Graph.Authentication', 'Microsoft.Graph.Users')
-        Write-DebugLog "Required modules: $($requiredModules -join ', ') @ v$targetVersion" -Level INFO
+        Write-DebugLog "Required modules: $($requiredModules -join ', ') (minimum v$minimumVersion)" -Level INFO
         
         foreach ($moduleName in $requiredModules) {
             Write-DebugLog "Processing module: $moduleName" -Level INFO
             
-            # Check if correct version is already imported
+            # Check if a compatible version is already imported
             $loadedModule = Get-Module -Name $moduleName
-            if ($loadedModule -and $loadedModule.Version.ToString().StartsWith($targetVersion)) {
+            if ($loadedModule -and [version]$loadedModule.Version -ge $minimumVersion) {
                 Write-DebugLog "$moduleName v$($loadedModule.Version) is already loaded" -Level SUCCESS
                 Write-Host "$moduleName is already loaded." -ForegroundColor Green
                 continue
             }
             
-            # Check if target version is available
+            # Check if a compatible version is available (>= minimum)
             $availableModule = Get-Module -ListAvailable -Name $moduleName | 
-                               Where-Object { $_.Version.ToString().StartsWith($targetVersion) } | 
+                               Where-Object { [version]$_.Version -ge $minimumVersion } | 
+                               Sort-Object Version -Descending |
                                Select-Object -First 1
             
             if (-not $availableModule) {
-                Write-DebugLog "$moduleName v$targetVersion not found. Installing..." -Level WARNING
-                Write-Host "Installing $moduleName v$targetVersion..." -ForegroundColor Yellow
-                Install-Module -Name $moduleName -RequiredVersion $targetVersion -Scope CurrentUser -Force -AllowClobber
-                Write-DebugLog "$moduleName v$targetVersion installed successfully" -Level SUCCESS
+                Write-DebugLog "$moduleName >= v$minimumVersion not found. Installing latest..." -Level WARNING
+                Write-Host "Installing $moduleName..." -ForegroundColor Yellow
+                Install-Module -Name $moduleName -Scope CurrentUser -Force -AllowClobber
+                Write-DebugLog "$moduleName installed successfully" -Level SUCCESS
             }
             else {
                 Write-DebugLog "$moduleName found. Version: $($availableModule.Version)" -Level INFO
             }
             
-            # Import the specific version
-            Write-DebugLog "Importing $moduleName v$targetVersion..." -Level INFO
+            # Import the module (uses the latest compatible installed version)
+            Write-DebugLog "Importing $moduleName..." -Level INFO
             Write-Host "Importing $moduleName..." -ForegroundColor Cyan
-            Import-Module $moduleName -RequiredVersion $targetVersion -ErrorAction Stop -Force
+            Import-Module $moduleName -ErrorAction Stop -Force
             $imported = Get-Module -Name $moduleName
             Write-DebugLog "$moduleName v$($imported.Version) imported successfully" -Level SUCCESS
         }
